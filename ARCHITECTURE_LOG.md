@@ -42,6 +42,23 @@ and may be off by a few minutes.
 
 ## 2026-05-08
 
+### 14:00 — Cross-platform support: scripts now run on Colab/Linux/CUDA, not just Vega + DirectML
+- All `pneumonia_*.py` scripts now use `get_device()` which tries DirectML →
+  CUDA → CPU in that order. The `import torch_directml` is wrapped in
+  `try/except` so the absence of the (Windows-only) package is harmless.
+- Hardcoded `c:\temp\pneumonia\...` paths replaced with
+  `Path(__file__).resolve().parent` defaults plus `PNEUMONIA_DATA` /
+  `PNEUMONIA_RUNS` environment-variable overrides. Lets the project run
+  unchanged from `/content/Pneumonia-xray-training/` on Colab or
+  `~/projects/...` on Linux.
+- `pneumonia_run_folds.py` now uses `sys.executable` instead of a hardcoded
+  venv path, so it works in any Python environment.
+- New `pneumonia_colab.ipynb` notebook gives a one-click pipeline: clone,
+  install deps, upload `kaggle.json`, download dataset, train, eval, plot.
+- **Speed reality check:** the same 5-fold ResNet50 @ 288 run takes
+  ~25 minutes on a free Colab T4 vs. ~7 hours on Vega 64 + DirectML —
+  roughly a 17× speedup, consistent with our earlier estimate.
+
 ### 09:30 — Implemented SNRAdamW optimizer (Litman & Guo 2026)
 - Source: "A Theory of Generalization in Deep Learning", arXiv:2605.01172,
   published May 2026.

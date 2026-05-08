@@ -14,6 +14,7 @@ Usage:
 """
 import argparse
 import json
+import os
 import random
 import time
 from collections import Counter
@@ -22,7 +23,6 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
-import torch_directml as dml
 from PIL import Image
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
@@ -31,9 +31,37 @@ from tqdm import tqdm
 
 import timm
 
-DATA_ROOT = Path(r"c:\temp\pneumonia\data\chest_xray")
-OUT_DIR = Path(r"c:\temp\pneumonia\runs")
-OUT_DIR.mkdir(exist_ok=True)
+# torch-directml is Windows-only and only ships wheels for Python ≤ 3.11.
+# On Colab / Linux / NVIDIA we fall back to plain CUDA.
+try:
+    import torch_directml as dml  # noqa: F401
+    HAS_DML = True
+except ImportError:
+    HAS_DML = False
+    dml = None  # type: ignore
+
+# Paths resolve relative to this script so the project works from any
+# install location (Colab `/content/...`, Linux `~/projects/...`, etc.).
+# Environment variables `PNEUMONIA_DATA` and `PNEUMONIA_RUNS` override.
+PROJECT_ROOT = Path(__file__).resolve().parent
+DATA_ROOT = Path(os.environ.get(
+    "PNEUMONIA_DATA",
+    PROJECT_ROOT / "data" / "chest_xray",
+))
+OUT_DIR = Path(os.environ.get(
+    "PNEUMONIA_RUNS",
+    PROJECT_ROOT / "runs",
+))
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_device():
+    """Return (device, human-readable name). Tries DirectML → CUDA → CPU."""
+    if HAS_DML and dml.device_count() > 0:  # type: ignore[union-attr]
+        return dml.device(0), f"DirectML: {dml.device_name(0)}"  # type: ignore[union-attr]
+    if torch.cuda.is_available():
+        return torch.device("cuda:0"), f"CUDA: {torch.cuda.get_device_name(0)}"
+    return torch.device("cpu"), "CPU (no GPU detected — training will be slow)"
 
 
 def parse_args():
@@ -352,8 +380,8 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    device = dml.device(0)
-    print(f"Device: {dml.device_name(0)}")
+    device, device_name = get_device()
+    print(f"Device: {device_name}")
 
     session_start = time.time()
     session_limit_s = args.max_session_minutes * 60 if args.max_session_minutes > 0 else 0.0

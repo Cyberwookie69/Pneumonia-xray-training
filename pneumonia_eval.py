@@ -16,14 +16,13 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch_directml as dml
 from sklearn.metrics import cohen_kappa_score, roc_auc_score
 from torch.utils.data import DataLoader
 
 import timm
 from pneumonia_train import (
     DATA_ROOT, OUT_DIR, FocalLoss, XRayDataset, build_transforms,
-    evaluate, list_images,
+    evaluate, get_device, list_images,
 )
 
 
@@ -173,8 +172,8 @@ def main():
     if not args.run_name and not args.ensemble:
         raise SystemExit("Provide --run_name or --ensemble (or both, if you're feeling fancy).")
 
-    device = dml.device(0)
-    print(f"Device: {dml.device_name(0)}")
+    device, device_name = get_device()
+    print(f"Device: {device_name}")
 
     items = list_images(DATA_ROOT)
     test_items = [(p, l) for p, l, s in items if s == "test"]

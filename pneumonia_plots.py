@@ -18,13 +18,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch_directml as dml
 import timm
 from sklearn.manifold import TSNE
 from torch.utils.data import DataLoader
 
 from pneumonia_train import (
-    DATA_ROOT, OUT_DIR, XRayDataset, build_transforms, list_images,
+    DATA_ROOT, OUT_DIR, XRayDataset, build_transforms, get_device, list_images,
 )
 
 
@@ -146,8 +145,8 @@ def cmd_curves(args):
 
 def cmd_features(args):
     """Extract penultimate features on the test set and visualise via t-SNE."""
-    device = dml.device(0)
-    print(f"Device: {dml.device_name(0)}")
+    device, device_name = get_device()
+    print(f"Device: {device_name}")
 
     # Load checkpoint (re-using the eval script's logic, but inline here so this
     # script stands alone)

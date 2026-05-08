@@ -17,15 +17,16 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-import torch_directml as dml
 import timm
 from PIL import Image
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 
-from pneumonia_train import DATA_ROOT, OUT_DIR, build_transforms, list_images
+from pneumonia_train import (
+    DATA_ROOT, OUT_DIR, build_transforms, get_device, list_images,
+)
 
-OUT_BASE = Path(r"c:\temp\pneumonia\runs")
+OUT_BASE = OUT_DIR  # alias for back-compat with earlier code in this file
 
 
 def parse_args():
@@ -118,8 +119,8 @@ def main():
     args = parse_args()
     random.seed(args.seed)
     np.random.seed(args.seed)
-    device = dml.device(0)
-    print(f"Device: {dml.device_name(0)}")
+    device, device_name = get_device()
+    print(f"Device: {device_name}")
 
     model, arch = load_model(args.run_name, args.use_best, device)
     target_layer = find_target_layer(model)

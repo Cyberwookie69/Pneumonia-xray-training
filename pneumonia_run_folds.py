@@ -17,8 +17,10 @@ import sys
 import time
 from pathlib import Path
 
-VENV_PYTHON = Path(r"c:\temp\pneumonia\.venv311\Scripts\python.exe")
-TRAIN_SCRIPT = Path(r"c:\temp\pneumonia\pneumonia_train.py")
+# Use whatever Python is currently running this script — works on Colab,
+# Linux, Windows venv, etc., without hardcoding any path.
+VENV_PYTHON = Path(sys.executable)
+TRAIN_SCRIPT = Path(__file__).resolve().parent / "pneumonia_train.py"
 
 
 def parse_args():
@@ -69,7 +71,13 @@ def main():
         run_name = f"{tag}_f{fold}"
         # Skip folds that are already fully trained — summary.json exists.
         # Saves ~15 s per chunk-restart in long chunked sessions.
-        summary = Path(r"c:\temp\pneumonia\runs") / run_name / "summary.json"
+        # Resolve via env override or default to <project>/runs (same logic as
+        # pneumonia_train.py, but we don't import it to avoid heavy timm/torch
+        # imports just for a path lookup).
+        import os as _os
+        runs_root = Path(_os.environ.get("PNEUMONIA_RUNS",
+                                          TRAIN_SCRIPT.parent / "runs"))
+        summary = runs_root / run_name / "summary.json"
         if summary.exists():
             print(f"\nFold {fold} ({run_name}) already complete (summary.json exists) — skipping.",
                   flush=True)
