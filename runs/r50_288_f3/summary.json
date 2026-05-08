@@ -1,0 +1,14 @@
+{
+  "model_tag": "resnet50.a1_in1k",
+  "pretrained": true,
+  "model": "resnet50.a1_in1k",
+  "img_size": 288,
+  "batch_size": 8,
+  "best_val_acc": 0.9655831739961759,
+  "fold": 3,
+  "n_folds": 5,
+  "use_focal": true,
+  "mixup_alpha": 0.0,
+  "ema_decay": 0.0,
+  "optimizer": "adamw"
+}

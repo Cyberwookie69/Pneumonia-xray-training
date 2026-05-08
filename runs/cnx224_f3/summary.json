@@ -1,0 +1,14 @@
+{
+  "model_tag": "convnext_tiny.fb_in22k_ft_in1k",
+  "pretrained": true,
+  "model": "convnext_tiny.fb_in22k_ft_in1k",
+  "img_size": 224,
+  "batch_size": 8,
+  "best_val_acc": 0.9818355640535373,
+  "fold": 3,
+  "n_folds": 5,
+  "use_focal": true,
+  "mixup_alpha": 0.0,
+  "ema_decay": 0.0,
+  "optimizer": "adamw"
+}

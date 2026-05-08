@@ -1,0 +1,13 @@
+{
+  "model_tag": "resnet18_scratch",
+  "pretrained": false,
+  "model": "resnet18",
+  "img_size": 224,
+  "batch_size": 8,
+  "best_val_acc": 0.9407831900668577,
+  "fold": 1,
+  "n_folds": 5,
+  "use_focal": true,
+  "mixup_alpha": 0.0,
+  "ema_decay": 0.0
+}

@@ -1,0 +1,40 @@
+# Secrets — NEVER commit these
+kaggle.json
+*.env
+
+# Virtual environments
+.venv*/
+venv*/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# Datasets (4.7 GB — way too large for git)
+data/
+
+# Model checkpoints (107-213 MB each, ~3 GB total)
+*.pt
+*.pth
+*.ckpt
+
+# Raw NumPy data dumps (re-derivable from checkpoints)
+*.npz
+
+# Third-party reference material (not original work, downloaded for comparison)
+_competitor/
+top_notebooks/
+
+# Logs (data is captured in summary.json files)
+logs/
+*.log
+
+# OS / IDE artefacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Claude Code metadata (per-machine state, not source)
+.claude/

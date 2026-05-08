@@ -1,0 +1,16 @@
+{
+  "venvPath": ".",
+  "venv": ".venv311",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportMissingParameterType": "none",
+  "reportMissingTypeArgument": "none",
+  "reportUntypedFunctionDecorator": "none",
+  "reportPrivateImportUsage": "none",
+  "reportGeneralTypeIssues": "warning"
+}
