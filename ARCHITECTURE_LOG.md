@@ -90,6 +90,19 @@ and may be off by a few minutes.
 
 ## 2026-05-09
 
+### Colab notebook: 3-architecture default pipeline
+- `pneumonia_colab.ipynb` now trains all three ensembles by default (ResNet50,
+  ConvNeXt-Tiny, SNR-AdamW ResNet50) and evaluates per-arch + a 15-model
+  multi-architecture ensemble.
+- ConvNeXt-Tiny and SNR-AdamW cells gained URL + 3-line summary comments
+  (arXiv:2201.03545 and arXiv:2605.01172 respectively) so the notebook is
+  self-explanatory for the report reader.
+- Plots cell now produces learning curves for all three architectures (t-SNE
+  and Grad-CAM stay on the strongest single fold to keep the figure budget
+  manageable).
+- Total wall-clock on a free T4 is ~80 min (3× 25 min training + setup +
+  eval/plots), still well inside the ~12 h Colab session limit.
+
 ### Explicit `--device` selection in `pneumonia_train.py`
 - Added `--device {auto,dml,cuda,cpu}` CLI flag. Default `auto` keeps the
   existing DirectML → CUDA → CPU fallback chain unchanged.
