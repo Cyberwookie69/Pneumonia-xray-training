@@ -88,6 +88,20 @@ and may be off by a few minutes.
 
 ---
 
+## 2026-05-09
+
+### Explicit `--device` selection in `pneumonia_train.py`
+- Added `--device {auto,dml,cuda,cpu}` CLI flag. Default `auto` keeps the
+  existing DirectML → CUDA → CPU fallback chain unchanged.
+- `get_device()` now takes a `prefer` argument; non-`auto` choices fall back
+  to CPU (with a clear message) if the requested backend is unavailable.
+- Motivation: lets a user pin a specific backend for benchmarking or debugging
+  without editing code, complementing the cross-platform work from 2026-05-08.
+  Notebook (`pneumonia_colab.ipynb`) needs no change — Colab still hits the
+  `auto` path and lands on CUDA.
+
+---
+
 ## 2026-05-07
 
 ### 00:00 — Defined the goal

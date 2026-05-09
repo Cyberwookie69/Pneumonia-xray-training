@@ -55,8 +55,26 @@ OUT_DIR = Path(os.environ.get(
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_device():
-    """Return (device, human-readable name). Tries DirectML → CUDA → CPU."""
+def get_device(prefer="auto"):
+    """Return (device, human-readable name).
+
+    `prefer` is one of:
+      - "auto": try DirectML → CUDA → CPU (default)
+      - "dml" : force DirectML, fall back to CPU if unavailable
+      - "cuda": force CUDA, fall back to CPU if unavailable
+      - "cpu" : force CPU
+    """
+    if prefer == "cpu":
+        return torch.device("cpu"), "CPU (forced)"
+    if prefer == "cuda":
+        if torch.cuda.is_available():
+            return torch.device("cuda:0"), f"CUDA: {torch.cuda.get_device_name(0)}"
+        return torch.device("cpu"), "CPU (CUDA not available, falling back)"
+    if prefer == "dml":
+        if HAS_DML and dml.device_count() > 0:  # type: ignore[union-attr]
+            return dml.device(0), f"DirectML: {dml.device_name(0)}"  # type: ignore[union-attr]
+        return torch.device("cpu"), "CPU (DirectML not available, falling back)"
+    # auto
     if HAS_DML and dml.device_count() > 0:  # type: ignore[union-attr]
         return dml.device(0), f"DirectML: {dml.device_name(0)}"  # type: ignore[union-attr]
     if torch.cuda.is_available():
@@ -109,6 +127,10 @@ def parse_args():
                    help="Use SNR-gated AdamW (Litman & Guo 2026) instead of "
                         "standard AdamW. Adds one extra state vector per "
                         "parameter; same wall-clock cost.")
+    p.add_argument("--device", choices=["auto", "dml", "cuda", "cpu"],
+                   default="auto",
+                   help="Force a specific compute device. Default 'auto' "
+                        "tries DirectML → CUDA → CPU.")
     p.set_defaults(use_focal=True, tta=True)
     return p.parse_args()
 
@@ -380,7 +402,7 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    device, device_name = get_device()
+    device, device_name = get_device(args.device)
     print(f"Device: {device_name}")
 
     session_start = time.time()
