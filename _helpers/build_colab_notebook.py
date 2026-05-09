@@ -60,7 +60,12 @@ CELLS = [
         "- Eval + plots: ~5 min\n"
         "- **Total: ~110 min on a free T4** (well inside the ~12 h Colab session limit)\n"
         "\n"
-        "(The same pipeline takes ~30+ hours on AMD Vega 64 + DirectML on Windows.)"
+        "(The same pipeline takes ~30+ hours on AMD Vega 64 + DirectML on Windows.)\n"
+        "\n"
+        "## Setup flow\n"
+        "Run sections 1-2, then **either** section 3 (recommended — uses Drive "
+        "for credentials and persistent runs) **or** section 4 (manual upload). "
+        "After that, run sections 5-12 in order."
     ),
     md("## 1. Clone repo + verify GPU"),
     code(
@@ -76,32 +81,59 @@ CELLS = [
     ),
     code("!pip install -q timm grad-cam opencv-python-headless kaggle"),
     md(
-        "## 3. Kaggle authentication\n"
+        "## 3. Mount Drive + load Kaggle credentials (recommended)\n"
         "\n"
-        "Upload your `kaggle.json` (download from "
-        "https://www.kaggle.com/settings → \"Create New API Token\")."
-    ),
-    code(
-        "from google.colab import files\n"
-        "uploaded = files.upload()  # select kaggle.json\n"
-        "!mkdir -p ~/.kaggle && cp kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json"
-    ),
-    md("## 4. Download dataset (~2.3 GB, ~1 min)"),
-    code("!python pneumonia.py"),
-    md(
-        "## 5. (Optional) Persist checkpoints to Google Drive\n"
+        "Mounts Google Drive, then:\n"
+        "- Copies `kaggle.json` from `My Drive/kaggle.json` to `~/.kaggle/` "
+        "if you've put it there (one-time setup — skip the upload widget every run).\n"
+        "- Sets `PNEUMONIA_RUNS` to a Drive folder so checkpoints survive "
+        "the ~12 h Colab session timeout.\n"
         "\n"
-        "Colab sessions die after ~12 h and lose `/content/`. Mount Drive to "
-        "keep your checkpoints. Skip this cell if you don't care about persistence."
+        "If `kaggle.json` is **not** on Drive, this cell still works (sets up "
+        "persistence) and you fall through to section 4 to upload it manually."
     ),
     code(
         "from google.colab import drive\n"
+        "import os, shutil\n"
+        "\n"
         "drive.mount('/content/drive')\n"
-        "import os\n"
+        "\n"
+        "# Pull kaggle.json from Drive if you've placed it there.\n"
+        "src = '/content/drive/MyDrive/kaggle.json'\n"
+        "kaggle_dir = os.path.expanduser('~/.kaggle')\n"
+        "if os.path.exists(src):\n"
+        "    os.makedirs(kaggle_dir, exist_ok=True)\n"
+        "    shutil.copy(src, os.path.join(kaggle_dir, 'kaggle.json'))\n"
+        "    os.chmod(os.path.join(kaggle_dir, 'kaggle.json'), 0o600)\n"
+        "    print('✓ kaggle.json copied from Drive — section 4 can be skipped')\n"
+        "else:\n"
+        "    print(f'⚠ {src} not found — run section 4 to upload it manually,\\n'\n"
+        "          f'  or place kaggle.json at that Drive path for next time.')\n"
+        "\n"
+        "# Persist runs across Colab sessions.\n"
         "os.makedirs('/content/drive/MyDrive/pneumonia_runs', exist_ok=True)\n"
         "os.environ['PNEUMONIA_RUNS'] = '/content/drive/MyDrive/pneumonia_runs'\n"
         "print(f\"Runs will be saved to: {os.environ['PNEUMONIA_RUNS']}\")"
     ),
+    md(
+        "## 4. Kaggle authentication via upload widget (fallback)\n"
+        "\n"
+        "Only needed if section 3 didn't find `kaggle.json` on your Drive. "
+        "Click *Choose Files* and pick the `kaggle.json` you downloaded from "
+        "https://www.kaggle.com/settings → \"Create New API Token\"."
+    ),
+    code(
+        "import os\n"
+        "if os.path.exists(os.path.expanduser('~/.kaggle/kaggle.json')):\n"
+        "    print('✓ kaggle.json already in place (loaded by section 3) — '\n"
+        "          'no need to upload')\n"
+        "else:\n"
+        "    from google.colab import files\n"
+        "    uploaded = files.upload()  # select kaggle.json\n"
+        "    !mkdir -p ~/.kaggle && cp kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json"
+    ),
+    md("## 5. Download dataset (~2.3 GB, ~1 min)"),
+    code("!python pneumonia.py"),
     md(
         "## 6. Step 1 — ResNet50 from scratch (baseline)\n"
         "\n"

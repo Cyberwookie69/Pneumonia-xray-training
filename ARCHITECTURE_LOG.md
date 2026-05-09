@@ -90,6 +90,20 @@ and may be off by a few minutes.
 
 ## 2026-05-09
 
+### Colab notebook: Drive-based Kaggle credentials by default
+- Section 3 of `pneumonia_colab.ipynb` now mounts Drive **and** copies
+  `kaggle.json` from `My Drive/kaggle.json` into `~/.kaggle/` if present.
+  The upload widget in section 4 is now a fallback that detects the file
+  is already in place and prints a "no need to upload" notice.
+- Why: the `files.upload()` widget hangs indefinitely waiting for a click
+  every Colab session. With the JSON on Drive, "run all cells" works
+  end-to-end without manual intervention.
+- Trade-off: kaggle.json now lives on the user's Drive. Anyone with
+  share-access to that Drive folder can use the API key. Mitigated by
+  documenting it explicitly + recommending a private folder.
+- Persistence (`PNEUMONIA_RUNS=/content/drive/MyDrive/pneumonia_runs`)
+  is now part of the same cell — no longer a separate optional step.
+
 ### Colab notebook restructured as 4-rung complexity ladder
 - `pneumonia_colab.ipynb` rewritten so each training section is one rung
   with explicit framing of what it adds vs. the previous rung:
