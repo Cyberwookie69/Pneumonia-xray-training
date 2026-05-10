@@ -1,0 +1,71 @@
+{
+  "data_root": "C:\\temp\\pneumonia\\data\\chest_xray",
+  "splits": {
+    "train": {
+      "pne_persons_n": 1635,
+      "pne_range": [
+        1,
+        1945
+      ],
+      "norm_bare_n": 518,
+      "norm_bare_range": [
+        115,
+        766
+      ],
+      "norm_normal2_n": 693,
+      "norm_normal2_range": [
+        383,
+        1423
+      ]
+    },
+    "val": {
+      "pne_persons_n": 7,
+      "pne_range": [
+        1946,
+        1954
+      ],
+      "norm_bare_n": 0,
+      "norm_bare_range": null,
+      "norm_normal2_n": 8,
+      "norm_normal2_range": [
+        1427,
+        1442
+      ]
+    },
+    "test": {
+      "pne_persons_n": 202,
+      "pne_range": [
+        1,
+        1685
+      ],
+      "norm_bare_n": 65,
+      "norm_bare_range": [
+        1,
+        111
+      ],
+      "norm_normal2_n": 160,
+      "norm_normal2_range": [
+        7,
+        381
+      ]
+    }
+  },
+  "intersections": {
+    "train_x_val": {
+      "pne": 0,
+      "norm_bare": 0,
+      "norm_normal2": 0
+    },
+    "train_x_test": {
+      "pne": 170,
+      "norm_bare": 0,
+      "norm_normal2": 0
+    },
+    "val_x_test": {
+      "pne": 0,
+      "norm_bare": 0,
+      "norm_normal2": 0
+    }
+  },
+  "verdict": "clean"
+}

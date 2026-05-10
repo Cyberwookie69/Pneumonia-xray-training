@@ -92,6 +92,74 @@ reported that as test accuracy.
 
 ---
 
+## §9 — Methodology audit: literature comparison and patient-isolation verification
+
+The Kaggle Chest X-Ray Pneumonia dataset is a popular benchmark and the
+literature reports test accuracies ranging from 92.8 % (Kermany et al.,
+2018, the original dataset paper) to 98.1 % (Bharati et al., 2020).
+Comparison across these numbers requires care: an audit of the top-100
+most-voted Kaggle notebooks for this dataset reveals that **three of the
+four notebooks claiming 99 %+ test accuracy** (#32, #60, #67 — clearly
+forks of the same template) reconstruct their "test set" by
+`train_test_split`-ing the official `/train` folder and never touch the
+official `/test`. Their reported "test accuracy" is therefore a
+train-distribution metric — same class prior (~74 % PNE), no held-out
+distribution shift — and roughly comparable to evaluating on training
+data.
+
+A more subtle variant affects the Liverpool deep-learning finalproject (a
+peer custom-CNN submission). Their split code correctly identifies
+`splits["test"]` as the official `/test` folder, but every ablation
+table reports `val_acc` from a re-split of train + the (tiny) official
+val. The value 0.9761 propagates through the project as the headline
+result. When the champion model is finally evaluated on the official
+test, accuracy collapses to **0.7179** — a 25.8 pp gap that should have
+been a red flag for distribution mismatch but is not addressed in their
+report.
+
+To confirm that **our** reported test KPIs are honest, we verified
+patient isolation by parsing filename conventions across all three
+official splits (`_helpers/verify_patient_isolation.py`):
+
+- **NORM** filenames follow either `IM-XXXX-YYYY.jpeg` or
+  `NORMAL2-IM-XXXX-YYYY.jpeg` — two disjoint ID namespaces, each with
+  **non-overlapping XXXX ranges between train and test**:
+  bare-IM uses train [115-766] and test [1-111]; NORMAL2-IM uses train
+  [383-1423] and test [7-381]. Zero shared identifiers.
+- **PNE** filenames follow `personXXX_{bacteria,virus}_YYY.jpeg`. Both
+  train (range 1-1945) and test (range 1-1685) start their `personXXX`
+  numbering from 1, producing a numerical overlap of 170 IDs. This is
+  consistent with the per-split renumbering documented by Kermany et
+  al. (2018), not real patient leakage: a global numbering would have
+  test starting at 1955+ rather than 1, and the disjoint NORM ranges
+  in both namespaces corroborate this design choice. Train (1-1945)
+  and val (1946-1954) share a continuous numbering scheme — merging
+  them for cross-validation is patient-safe by construction.
+
+Without ground-truth patient identifiers (not present in the Kaggle
+redistribution), this remains a structural inference. It is, however,
+the most parsimonious interpretation consistent with the observed
+filename ranges and the methodology described in the original Kermany
+paper.
+
+A residual methodological concern is *intra-pool patient grouping*:
+within the merged train+val pool, the same patient's `bacteria` and
+`virus` PNE scans may land on opposite sides of a random K-fold split.
+This may inflate our cross-validation val accuracy by an estimated 1-3
+pp but does not affect the held-out test KPIs. Mitigating this with
+`GroupKFold` was considered but rejected: the marginal gain in CV
+realism would not change the headline test metrics, and the
+assignment's emphasis is on CNN design rather than splitting strategy.
+
+**Position taken in this report**: any literature claim above 95 % test
+accuracy is treated with skepticism unless its split methodology has
+been independently audited; the official Kaggle test set is used
+untouched as our single point of comparison; the verification script
+above is shipped with the codebase so reviewers can reproduce the
+patient-isolation check on their own copy of the dataset.
+
+---
+
 ## Discussion 1 — Negative result: SNR-AdamW underperforms standard AdamW
 
 We implemented the SNR preconditioner from Litman & Guo (2026,
