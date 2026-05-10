@@ -368,7 +368,12 @@ CELLS = [
         "## 13. Champion — Grad-CAM\n"
         "\n"
         "Where does the champion model look when it predicts pneumonia? Useful for clinician "
-        "trust and for catching reliance on dataset artefacts (text annotations, machine IDs)."
+        "trust and for catching reliance on dataset artefacts (text annotations, machine IDs).\n"
+        "\n"
+        "*Reading the figure*: the number under each heatmap is **P(Pneumonia)** — the model's "
+        "predicted **certainty** that the scan shows pneumonia, on a 0–1 scale (0.95 = 95 % "
+        "certain pneumonia; 0.10 = 90 % certain normal). This is a per-image quantity and is "
+        "**not** the same as sensitivity, which is a dataset-level metric reported in §11."
     ),
     code(
         "# Grad-CAM only works with the existing pneumonia_gradcam.py for timm models.\n"
