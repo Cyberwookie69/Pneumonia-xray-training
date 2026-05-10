@@ -1,27 +1,14 @@
-"""Custom from-scratch CNN for the pneumonia X-ray assignment.
+"""Parametric from-scratch CNN trainer.
 
-This is the academic-focused trainer that answers the three assignment questions:
-  Q1. Number of conv-pool building blocks
-  Q2. Strides, padding, activation function
-  Q3. Solution to avoid overfitting
-
-The CNN is parametric: every architectural decision is a CLI flag, so a single
-codebase generates every row of every ablation table.
+Every architectural decision is a CLI flag, so a single codebase generates
+every row of every ablation table.
 
 Usage examples:
-    # depth ablation row
     python pneumonia_cnn_custom.py --n_blocks 4 --run_name d4_relu_pool
-
-    # activation ablation row
     python pneumonia_cnn_custom.py --activation gelu --run_name d4_gelu_pool
-
-    # overfitting ablation row
     python pneumonia_cnn_custom.py --use_bn --use_dropout 0.3 --augment \
         --run_name d4_bn_drop_aug
-
-    # final champion run with 5-fold CV
     python pneumonia_cnn_custom.py --n_folds 5 --fold 0 --run_name champion_f0
-    # ... repeat for fold 1..4 ...
 """
 import argparse
 import json
@@ -62,7 +49,7 @@ def make_activation(name: str) -> nn.Module:
 
 
 class ConvPoolBlock(nn.Module):
-    """One 'convolution-pooling building block' as the assignment puts it.
+    """One convolution-pooling building block.
 
     Conv 3x3 (with chosen padding + stride) -> [BatchNorm] -> activation -> [Pool].
 
@@ -230,7 +217,6 @@ def evaluate(model, loader, device, criterion):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    # Architecture (Q1, Q2)
     p.add_argument("--n_blocks", type=int, default=4)
     p.add_argument("--base_channels", type=int, default=32)
     p.add_argument("--activation", choices=["relu", "leaky", "gelu"], default="relu")
@@ -240,7 +226,6 @@ def parse_args():
                    help="Conv weight init. 'kaiming' (He, default) is the "
                         "standard for stacked ReLUs; 'glorot' (Xavier) is "
                         "kept as a controlled comparison for the depth ablation.")
-    # Overfitting controls (Q3)
     p.add_argument("--use_bn", action="store_true",
                    help="add BatchNorm after each conv")
     p.add_argument("--use_dropout", type=float, default=0.0,

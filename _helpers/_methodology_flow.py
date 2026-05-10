@@ -1,13 +1,10 @@
 """Generate methodology_flow.png — a single-figure overview of the full
-end-to-end pipeline that backs every chapter of the report.
+end-to-end pipeline.
 
-The figure has three vertical lanes:
+Three vertical lanes:
   1. Data flow (Kaggle → pool → 5-fold + held-out test)
   2. Experimental flow (A1 depth → A2 stride/pad/act → A3 overfitting → champion)
   3. Evaluation flow (champion → 5-fold ensemble → 4 KPIs at 3 thresholds)
-
-Designed to be the "if a reader only looks at one figure, this is the one"
-diagram. No accuracy numbers — those live in their respective chapters.
 """
 from pathlib import Path
 
@@ -79,15 +76,15 @@ box(LANE2_X, 80, 24, 8,
     color=EXP_COLOR, edge=EXP_EDGE, bold=True)
 
 box(LANE2_X, 67, 24, 8,
-    "A1 — Depth (Q1)\n2/3/4/5 blocks + Glorot ctrl",
+    "A1 — Depth\n2/3/4/5 blocks + Glorot ctrl",
     color=EXP_COLOR, edge=EXP_EDGE)
 
 box(LANE2_X, 54, 24, 8,
-    "A2 — Stride/pad/act (Q2)\n6 representative variants",
+    "A2 — Stride/pad/act\n6 representative variants",
     color=EXP_COLOR, edge=EXP_EDGE)
 
 box(LANE2_X, 41, 24, 8,
-    "A3 — Overfitting (Q3)\nnone/BN/dropout/L2/aug/combo",
+    "A3 — Overfitting\nnone/BN/dropout/L2/aug/combo",
     color=EXP_COLOR, edge=EXP_EDGE)
 
 box(LANE2_X, 26, 24, 10,

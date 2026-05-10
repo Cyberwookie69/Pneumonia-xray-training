@@ -1,4 +1,4 @@
-"""Report-quality figures from training runs.
+"""Publication-quality figures from training runs.
 
 Subcommands:
     curves   — learning curves (loss + acc, per fold) from history.json

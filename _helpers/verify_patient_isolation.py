@@ -1,9 +1,6 @@
 """Verify that the official Kaggle Chest X-Ray train/val/test splits contain
-NO shared patient identifiers — i.e. that Kermany et al. (2018) preserved
-patient-level isolation and that our reported test KPIs reflect honest
-performance on unseen patients.
-
-Output is suitable to cite directly in §9 of the report.
+no shared patient identifiers (Kermany et al. 2018 preserved patient-level
+isolation between splits).
 
 Usage:
     python _helpers/verify_patient_isolation.py

@@ -115,9 +115,8 @@ def parse_args():
                         "because DirectML treats it as an opportunity to crash.")
     p.add_argument("--pretrained", action="store_true",
                    help="Initialise the timm backbone with pretrained weights. "
-                        "Off by default — the assignment-constrained baseline "
-                        "is from-scratch. Pass this flag to run the "
-                        "transfer-learning variant.")
+                        "Off by default. Pass this flag to load ImageNet "
+                        "weights for transfer learning.")
     p.add_argument("--max_session_minutes", type=float, default=0.0,
                    help="Stop cleanly after the current epoch once this many "
                         "wall-clock minutes have elapsed in this invocation. "
@@ -451,11 +450,10 @@ def main():
     dl_test = DataLoader(ds_test, batch_size=eval_bs, shuffle=False,
                          num_workers=nw, persistent_workers=nw > 0)
 
-    # Same architecture either way; only the initialisation differs. The
-    # assignment-constrained baseline is `pretrained=False`; pass `--pretrained`
-    # for the transfer-learning variant. With from-scratch + a 23M backbone
-    # like ResNet50 you'll overfit fast, so pair the default with a smaller
-    # `--model`, e.g. `--model resnet18`.
+    # Same architecture either way; only the initialisation differs. Pass
+    # `--pretrained` for the transfer-learning variant. With from-scratch +
+    # a 23M backbone like ResNet50 you'll overfit fast, so pair the default
+    # with a smaller `--model`, e.g. `--model resnet18`.
     model = timm.create_model(args.model, pretrained=args.pretrained, num_classes=1)
     n_params = sum(p.numel() for p in model.parameters())
     init_tag = "pretrained" if args.pretrained else "from-scratch"
