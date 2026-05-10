@@ -90,6 +90,30 @@ and may be off by a few minutes.
 
 ## 2026-05-10
 
+### Default seed flipped 42 → 72 — INVALIDATES every prior summary.json
+- Changed default `--seed` from 42 to 72 in: `pneumonia_train.py`,
+  `pneumonia_cnn_custom.py`, `pneumonia_biomedclip.py`, `pneumonia_rad_dino.py`,
+  `pneumonia_gradcam.py`, `pneumonia_plots.py`, and the hardcoded seeds in
+  `_helpers/_mixup_cutmix_demo.py`.
+- **Why this is breaking**: every random operation downstream of the seed
+  changes. K-fold splits compose differently, train_test_split picks a
+  different val set, model weights initialise from different random values,
+  WeightedRandomSampler shuffles differently, t-SNE init differs.
+  Every `summary.json`, `test_probs.npy`, `best_state.pt`, `history.json`,
+  and `medical_kpis.json` produced under seed=42 is now stale relative
+  to the codebase defaults.
+- **What is NOT invalidated**: cached frozen features in
+  `runs/rad_dino_features/` and `runs/biomedclip_features/` (depend only
+  on model + image bytes, not on seed). The 5-fold linear classifiers
+  trained on top of those features ARE invalidated though, since the
+  classifier training seeds the K-fold split.
+- **What you must do to actually re-run with seed=72**: delete the
+  affected `runs/<name>/` folders or pass an explicit `--run_name`
+  with a new tag (e.g., `champion_f0_s72`) so the auto-skip in
+  `run_if_missing` doesn't keep the seed=42 results around. The current
+  `--run_name` defaults all stay the same, so without manual cleanup
+  the notebook will skip every previously-completed row.
+
 ### Academic refocus: project scope cut to match the assignment
 - The assignment asks three specific CNN-design questions: (Q1) number of
   conv-pool blocks, (Q2) strides/padding/activation, (Q3) overfitting solution.

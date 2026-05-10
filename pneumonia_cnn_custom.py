@@ -242,7 +242,7 @@ def parse_args():
     p.add_argument("--epochs", type=int, default=20)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--num_workers", type=int, default=2)
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=72)
     # Splitting
     p.add_argument("--n_folds", type=int, default=1,
                    help="1 = single 88/12 split; >1 = stratified k-fold")

@@ -24,8 +24,8 @@ if not (DATA_ROOT / "NORMAL").exists():
         f"Run pneumonia.py first (or set PNEUMONIA_DATA env var)."
     )
 
-random.seed(42)
-np.random.seed(42)
+random.seed(72)
+np.random.seed(72)
 
 normal_imgs = list((DATA_ROOT / "NORMAL").glob("*.jpeg"))
 pneumonia_imgs = list((DATA_ROOT / "PNEUMONIA").glob("*.jpeg"))

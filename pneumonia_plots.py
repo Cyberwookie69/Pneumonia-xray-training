@@ -270,7 +270,7 @@ def main():
     p_feat.add_argument("--batch_size", type=int, default=8)
     p_feat.add_argument("--max_samples", type=int, default=624,
                         help="cap on test images to project (full test = 624)")
-    p_feat.add_argument("--seed", type=int, default=42)
+    p_feat.add_argument("--seed", type=int, default=72)
     p_feat.set_defaults(func=cmd_features)
 
     args = ap.parse_args()
