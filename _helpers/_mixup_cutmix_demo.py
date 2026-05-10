@@ -1,4 +1,5 @@
 """Generate an infographic showing Mixup, CutMix and Manifold Mixup on real chest X-rays."""
+import os
 import random
 from pathlib import Path
 
@@ -6,9 +7,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-DATA_ROOT = Path(r"c:\temp\pneumonia\data\chest_xray\train")
-OUT_PATH = Path(r"c:\temp\pneumonia\mixup_cutmix_demo.png")
+# Resolve dataset path with the same env-var-or-default logic as the rest of
+# the project, so this works on both Windows (c:\temp\pneumonia\data\...)
+# and Colab (/content/Pneumonia-xray-training/data/...).
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = Path(os.environ.get(
+    "PNEUMONIA_DATA",
+    PROJECT_ROOT / "data" / "chest_xray",
+)) / "train"
+OUT_PATH = PROJECT_ROOT / "_helpers" / "mixup_cutmix_demo.png"
 IMG_SIZE = 256
+
+if not (DATA_ROOT / "NORMAL").exists():
+    raise SystemExit(
+        f"Dataset not found at {DATA_ROOT}. "
+        f"Run pneumonia.py first (or set PNEUMONIA_DATA env var)."
+    )
 
 random.seed(42)
 np.random.seed(42)
