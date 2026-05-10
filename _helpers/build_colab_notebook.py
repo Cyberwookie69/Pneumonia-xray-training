@@ -61,7 +61,8 @@ CELLS = [
         "- Champion 5-fold + KPIs + curves + Grad-CAM: ~10 min\n"
         "- Mixup demo (display): instant\n"
         "- Transfer-learning comparison (ResNet50 @ 288, 5-fold + eval): ~8 min\n"
-        "- **Total: ~45 min on H100**\n"
+        "- RAD-DINO linear probe (medical-domain pretrained features): ~5 min\n"
+        "- **Total: ~50 min on H100**\n"
         "\n"
         "*Reference for context*: same pipeline takes ~3 h on free T4, ~1 h on A100, "
         "~30+ h on AMD Vega 64 + DirectML.\n"
@@ -486,6 +487,51 @@ CELLS = [
         "!python _helpers/medical_kpis.py --run $PNEUMONIA_RUNS/ensemble"
     ),
 
+    md(
+        "---\n"
+        "## 16. Transfer learning — RAD-DINO (medical-domain pretrained)\n"
+        "\n"
+        "Linear-probe baseline using **RAD-DINO** (Microsoft, 2024), a Vision Transformer "
+        "pretrained on ~877K chest X-rays from MIMIC-CXR, CheXpert, PadChest, NIH ChestX-ray14, "
+        "BRAX, and VinDr-CXR. Frozen features + 5-fold logistic regression on top — the standard "
+        "evaluation protocol for self-supervised representations.\n"
+        "\n"
+        "**⚠️ Caveat — possible distribution-level overlap.** The Kermany 2018 dataset "
+        "(Guangzhou Women & Children's Medical Center) is *not* in RAD-DINO's published "
+        "pretraining list, so direct image overlap is unlikely. However, chest X-ray "
+        "datasets share statistical properties (acquisition protocols, equipment, anatomy "
+        "distributions). Results from medical-domain pretrained models should therefore be "
+        "interpreted with this caveat — the test KPIs are not as cleanly held-out as for the "
+        "from-scratch champion or the ResNet50 + ImageNet baseline.\n"
+        "\n"
+        "**One-time setup**: visit https://huggingface.co/microsoft/rad-dino, accept the "
+        "model terms, then either run `huggingface-cli login` once or set the `HF_TOKEN` env "
+        "var with a token from https://huggingface.co/settings/tokens."
+    ),
+    code(
+        "# Install HuggingFace transformers + login if needed.\n"
+        "!pip install -q transformers accelerate\n"
+        "\n"
+        "# If you've already logged in once or set HF_TOKEN env var, this is a no-op.\n"
+        "import os\n"
+        "if not os.environ.get('HF_TOKEN'):\n"
+        "    try:\n"
+        "        from huggingface_hub import whoami\n"
+        "        whoami()\n"
+        "        print('✓ Already logged into HuggingFace')\n"
+        "    except Exception:\n"
+        "        from huggingface_hub import login\n"
+        "        login()  # interactive prompt"
+    ),
+    code(
+        "# Linear-probe RAD-DINO — features cached on Drive after first run.\n"
+        "!python pneumonia_rad_dino.py --run_name rad_dino_ensemble"
+    ),
+    code(
+        "# Medical KPIs on the RAD-DINO ensemble\n"
+        "!python _helpers/medical_kpis.py --run $PNEUMONIA_RUNS/rad_dino_ensemble"
+    ),
+
     # ===================================================================
     # Mini-report synthesis
     # ===================================================================
@@ -499,7 +545,7 @@ CELLS = [
         "data: an ablation row that hasn't been trained yet shows as a dash."
     ),
     md(
-        "## 16. Methodology overview\n"
+        "## 17. Methodology overview\n"
         "\n"
         "Three lanes — data, experiment, evaluation — with the test set held out from "
         "every tuning decision until the final eval."
@@ -514,7 +560,7 @@ CELLS = [
         "display(IPImage(fig_path))"
     ),
     md(
-        "## 17. A1 — Depth ablation\n"
+        "## 18. A1 — Depth ablation\n"
         "\n"
         "Number of conv-pool blocks. Glorot init at the winning depth is included as "
         "a controlled comparison: He init is a necessary condition at depth ≥ 4 for "
@@ -563,7 +609,7 @@ CELLS = [
         "    print(f'\\nA1 winner (test): {best_n} blocks at {max(accs):.4f}')"
     ),
     md(
-        "## 18. A2 — Stride / padding / activation\n"
+        "## 19. A2 — Stride / padding / activation\n"
         "\n"
         "Six representative variants at the A1 winning depth. Activation, padding, and "
         "stride-mode are varied; everything else held constant."
@@ -597,7 +643,7 @@ CELLS = [
         "    print(f'\\nA2 winner: {winner[0]} at {winner[1]:.4f}')"
     ),
     md(
-        "## 19. A3 — Regularisation\n"
+        "## 20. A3 — Regularisation\n"
         "\n"
         "Train-vs-val gap is the diagnostic for overfitting; a wide gap means the model "
         "memorises training data instead of generalising. The combination row is expected "
@@ -634,7 +680,7 @@ CELLS = [
         "          f'(train-val gap {winner[1]-winner[2]:+.3f})')"
     ),
     md(
-        "## 20. Mixup / CutMix / Manifold Mixup demo\n"
+        "## 21. Mixup / CutMix / Manifold Mixup demo\n"
         "\n"
         "Mixup α=0.2 on a pretrained backbone lost 0.64 pp test accuracy in our experiments. "
         "Pretrained class boundaries are already calibrated, so blending samples adds noise "
@@ -651,7 +697,7 @@ CELLS = [
         "    print('Demo image not found — re-run after dataset has been downloaded.')"
     ),
     md(
-        "## 21. Champion ensemble — medical KPIs\n"
+        "## 22. Champion ensemble — medical KPIs\n"
         "\n"
         "Five-fold custom-CNN ensemble. Reports the four KPIs at three operating points: "
         "default τ=0.5, val-tuned best-accuracy τ, and sensitivity-targeted τ ≥ 0.97."
@@ -688,34 +734,40 @@ CELLS = [
         "        ax.legend(loc='upper left'); plt.tight_layout(); plt.show()"
     ),
     md(
-        "## 22. Transfer-learning ensemble — medical KPIs\n"
+        "## 23. Transfer-learning baselines — medical KPIs\n"
         "\n"
-        "ResNet50 + ImageNet weights, 5-fold. Comparison baseline."
+        "Two transfer-learning approaches: **ResNet50 + ImageNet** (full fine-tune, generic "
+        "pretraining) and **RAD-DINO + linear probe** (frozen features, medical-domain "
+        "pretraining). RAD-DINO numbers carry the leakage caveat from §16."
     ),
     code(
-        "tl_kpi_path = f'{RUNS_ROOT}/ensemble/medical_kpis.json'\n"
-        "if not os.path.exists(tl_kpi_path):\n"
-        "    print('Transfer-learning KPIs not yet computed (run section 15 first).')\n"
-        "else:\n"
-        "    k = json.load(open(tl_kpi_path))\n"
-        "    print(f'AUROC  = {k[\"auroc\"]:.4f}')\n"
-        "    print(f'ECE    = {k[\"ece\"]:.4f}')\n"
-        "    print()\n"
-        "    print(f'{\"operating point\":<28}{\"τ\":>6}{\"acc\":>8}{\"sens\":>8}{\"spec\":>8}')\n"
-        "    for name, op in k['operating_points'].items():\n"
-        "        print(f'{name:<28}{op[\"threshold\"]:>6.3f}{op[\"acc\"]:>8.4f}'\n"
+        "for label, run_name in [('ResNet50 + ImageNet (full fine-tune)', 'ensemble'),\n"
+        "                         ('RAD-DINO + linear probe (medical pretraining)', 'rad_dino_ensemble')]:\n"
+        "    path = f'{RUNS_ROOT}/{run_name}/medical_kpis.json'\n"
+        "    print(f'\\n=== {label} ===')\n"
+        "    if not os.path.exists(path):\n"
+        "        print(f'  KPIs not yet computed at {path}')\n"
+        "        continue\n"
+        "    k = json.load(open(path))\n"
+        "    print(f'  AUROC  = {k[\"auroc\"]:.4f}')\n"
+        "    print(f'  ECE    = {k[\"ece\"]:.4f}')\n"
+        "    print(f'  {\"operating point\":<28}{\"τ\":>6}{\"acc\":>8}{\"sens\":>8}{\"spec\":>8}')\n"
+        "    for opname, op in k['operating_points'].items():\n"
+        "        print(f'  {opname:<28}{op[\"threshold\"]:>6.3f}{op[\"acc\"]:>8.4f}'\n"
         "              f'{op[\"sensitivity\"]:>8.4f}{op[\"specificity\"]:>8.4f}')"
     ),
     md(
-        "## 23. Headline comparison — 4 KPIs across approaches\n"
+        "## 24. Headline comparison — 4 KPIs across approaches\n"
         "\n"
         "Single comparison figure: each approach × four KPIs. Best-accuracy threshold "
-        "is used for sensitivity and specificity (the natural single-point summary)."
+        "is used for sensitivity and specificity (the natural single-point summary). "
+        "The **leakage caveat from §16** applies to the RAD-DINO bar in particular."
     ),
     code(
         "approaches = [\n"
-        "    ('Custom CNN (5-fold)',    f'{RUNS_ROOT}/champion_ensemble/medical_kpis.json'),\n"
-        "    ('Transfer learning ResNet50 (5-fold)', f'{RUNS_ROOT}/ensemble/medical_kpis.json'),\n"
+        "    ('Custom CNN (from scratch, 5-fold)',                  f'{RUNS_ROOT}/champion_ensemble/medical_kpis.json'),\n"
+        "    ('ResNet50 + ImageNet (generic pretraining, 5-fold)',  f'{RUNS_ROOT}/ensemble/medical_kpis.json'),\n"
+        "    ('RAD-DINO linear probe (medical pretraining, 5-fold)',f'{RUNS_ROOT}/rad_dino_ensemble/medical_kpis.json'),\n"
         "]\n"
         "loaded = []\n"
         "for label, path in approaches:\n"
@@ -763,7 +815,7 @@ CELLS = [
         "              f'{1 - app[\"one_minus_ece\"]:>8.4f}')"
     ),
     md(
-        "## 24. Conclusion\n"
+        "## 25. Conclusion\n"
         "\n"
         "**What worked.**\n"
         "- A 4-block ReLU CNN with same-padding and max-pool gives a solid from-scratch "
@@ -775,8 +827,10 @@ CELLS = [
         "additive but with diminishing returns.\n"
         "- Threshold tuning rebalances the false-negative-vs-false-positive cost without "
         "retraining; the model's underlying discrimination (AUROC) is unchanged.\n"
-        "- Transfer learning from ImageNet weights raises the headline accuracy but does "
-        "not necessarily improve calibration (ECE).\n"
+        "- Generic pretraining (ImageNet) raises the headline accuracy but does not "
+        "necessarily improve calibration (ECE).\n"
+        "- Domain-matched pretraining (RAD-DINO, ~877K chest X-rays) typically gives "
+        "another step up over generic pretraining — *with the leakage caveat below*.\n"
         "\n"
         "**What did not work.**\n"
         "- Mixup α=0.2 on a pretrained backbone lost 0.64 pp — pretrained class boundaries "
@@ -789,10 +843,18 @@ CELLS = [
         "**Methodological position.** The official Kaggle test set is patient-isolated by "
         "construction; our reported KPIs reflect honest performance on unseen patients. "
         "Numerical overlap of 170 PNE person-IDs between train and test is an artefact of "
-        "per-split renumbering, not real leakage."
+        "per-split renumbering, not real leakage.\n"
+        "\n"
+        "**RAD-DINO leakage caveat.** RAD-DINO's pretraining set (MIMIC-CXR, CheXpert, "
+        "PadChest, NIH ChestX-ray14, BRAX, VinDr-CXR) does not list the Kermany 2018 "
+        "dataset, so direct image overlap with our test set is unlikely. Distribution-level "
+        "overlap, however, is plausible: chest X-ray datasets share acquisition protocols, "
+        "equipment, and anatomy distributions. RAD-DINO's reported KPIs should therefore "
+        "be read as an upper-bound indication of medical-domain transfer, not as a "
+        "directly comparable point with the from-scratch and ImageNet baselines."
     ),
     md(
-        "## 25. Future work\n"
+        "## 26. Future work\n"
         "\n"
         "1. **Higher input resolution** (320 / 384) — pneumonia opacities are subtle and "
         "may benefit from finer sampling.\n"
