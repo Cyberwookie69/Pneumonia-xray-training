@@ -134,6 +134,13 @@ def main():
     print(f"ECE  ({args.n_bins} bins)              {ece:.4f}      "
           f"({'well-calibrated' if ece < 0.05 else 'mis-calibrated' if ece > 0.10 else 'borderline'})")
 
+    # Binomial standard error: any accuracy delta < 2*sigma is within noise.
+    import math
+    p = m_default["acc"]
+    sigma = math.sqrt(p * (1 - p) / len(labels))
+    print(f"Test accuracy noise floor:  sigma ~= {sigma:.4f} "
+          f"({sigma*100:.2f} pp); 95% CI half-width ~= {1.96*sigma*100:.2f} pp")
+
     # ── Calibration table ───────────────────────────────────────────────────
     print()
     print("Calibration breakdown (uniform bins of confidence = max(p, 1-p)):")
@@ -158,6 +165,8 @@ def main():
         },
         "test_prevalence_pne": float(labels.mean()),
         "n_test": int(len(labels)),
+        "noise_floor_sigma": sigma,
+        "noise_floor_95ci_pp": 1.96 * sigma * 100,
     }
     with open(run_dir / "medical_kpis.json", "w") as f:
         json.dump(out, f, indent=2)

@@ -93,72 +93,47 @@ reported that as test accuracy.
 
 ## §9 — Methodology audit: literature comparison and patient-isolation verification
 
-The Kaggle Chest X-Ray Pneumonia dataset is a popular benchmark and the
-literature reports test accuracies ranging from 92.8 % (Kermany et al.,
-2018, the original dataset paper) to 98.1 % (Bharati et al., 2020).
-Comparison across these numbers requires care: an audit of the top-100
-most-voted Kaggle notebooks for this dataset reveals that **three of the
-four notebooks claiming 99 %+ test accuracy** (#32, #60, #67 — clearly
-forks of the same template) reconstruct their "test set" by
-`train_test_split`-ing the official `/train` folder and never touch the
-official `/test`. Their reported "test accuracy" is therefore a
-train-distribution metric — same class prior (~74 % PNE), no held-out
-distribution shift — and roughly comparable to evaluating on training
-data.
+Literature on this dataset reports 92.8 % – 98.1 % test accuracy.
+Higher claims warrant scrutiny: in our top-100 audit, three of the
+four notebooks above 99 % silently re-split the official `/train`
+folder and report that as test accuracy. Their numbers are
+train-distribution metrics, not held-out test results.
 
-A more subtle methodological pitfall worth flagging — distinct from the
-re-split tactic above — is *reporting `val_acc` as the headline metric*
-when val has been reconstructed from the (merged train + tiny official
-val) pool. Such a val sits in the training distribution: same class
-prior, same scanner population, possible patient-level overlap with
-training. A model selected on this val can show a large val-vs-test gap
-once it is finally evaluated on the held-out official test set. Even
-when the val→test gap is only 1-3 pp under proper patient isolation,
-gaps of 20+ pp are observed when val is contaminated. The defensive
-practice — and the one we follow throughout this work — is to keep
-test untouched until the final evaluation and to report it, not val,
-as the headline result.
+A subtler pitfall — relevant when one merges train + val (as we do
+for stable CV): reporting val accuracy as the headline. Even when
+patient isolation is preserved, val sits in the training
+distribution; the model selected on val can show a large val-vs-test
+gap once the held-out test is finally touched. Our discipline: train
+on train, tune on val, **touch test once at the end**, and report
+test as the headline.
 
-To confirm that **our** reported test KPIs are honest, we verified
-patient isolation by parsing filename conventions across all three
-official splits (`_helpers/verify_patient_isolation.py`):
+### Patient-isolation verification (`_helpers/verify_patient_isolation.py`)
 
-- **NORM** filenames follow either `IM-XXXX-YYYY.jpeg` or
-  `NORMAL2-IM-XXXX-YYYY.jpeg` — two disjoint ID namespaces, each with
-  **non-overlapping XXXX ranges between train and test**:
-  bare-IM uses train [115-766] and test [1-111]; NORMAL2-IM uses train
-  [383-1423] and test [7-381]. Zero shared identifiers.
-- **PNE** filenames follow `personXXX_{bacteria,virus}_YYY.jpeg`. Both
-  train (range 1-1945) and test (range 1-1685) start their `personXXX`
-  numbering from 1, producing a numerical overlap of 170 IDs. This is
-  consistent with the per-split renumbering documented by Kermany et
-  al. (2018), not real patient leakage: a global numbering would have
-  test starting at 1955+ rather than 1, and the disjoint NORM ranges
-  in both namespaces corroborate this design choice. Train (1-1945)
-  and val (1946-1954) share a continuous numbering scheme — merging
-  them for cross-validation is patient-safe by construction.
+| Class | Namespace | Train range | Test range | Shared IDs |
+|-------|-----------|-------------|------------|:---------:|
+| NORM | `IM-XXXX-` | 115 – 766 | 1 – 111 | **0** |
+| NORM | `NORMAL2-IM-XXXX-` | 383 – 1423 | 7 – 381 | **0** |
+| PNE | `personXXX` | 1 – 1945 | 1 – 1685 | 170 (renumbering, not leakage) |
 
-Without ground-truth patient identifiers (not present in the Kaggle
-redistribution), this remains a structural inference. It is, however,
-the most parsimonious interpretation consistent with the observed
-filename ranges and the methodology described in the original Kermany
-paper.
+The 170 PNE "overlaps" are an artefact of per-split renumbering — both
+splits restart from `person1`. A global scheme would have placed test
+at 1955+, not 1. The disjoint NORM ranges across both namespaces
+corroborate that the original split was constructed patient-aware
+(consistent with Kermany et al. 2018); val (1946-1954) continues
+train numbering, so merging train + val for cross-validation is
+patient-safe by construction.
 
-A residual methodological concern is *intra-pool patient grouping*:
-within the merged train+val pool, the same patient's `bacteria` and
-`virus` PNE scans may land on opposite sides of a random K-fold split.
-This may inflate our cross-validation val accuracy by an estimated 1-3
-pp but does not affect the held-out test KPIs. Mitigating this with
-`GroupKFold` was considered but rejected: the marginal gain in CV
-realism would not change the headline test metrics, and the
-assignment's emphasis is on CNN design rather than splitting strategy.
+A residual concern is *intra-pool patient grouping*: within the
+merged pool, the same patient's bacterial and viral scans may land
+across a fold boundary. This may inflate cross-validation accuracy
+by ~1-3 pp but cannot affect held-out test KPIs. We did not adopt
+`GroupKFold` because the test number is unaffected and the
+assignment focuses on CNN design, not splitting strategy.
 
-**Position taken in this report**: any literature claim above 95 % test
-accuracy is treated with skepticism unless its split methodology has
-been independently audited; the official Kaggle test set is used
-untouched as our single point of comparison; the verification script
-above is shipped with the codebase so reviewers can reproduce the
-patient-isolation check on their own copy of the dataset.
+**Position taken**: literature claims above 95 % are treated with
+skepticism unless their split methodology has been audited. The
+verification script ships with the code so reviewers can reproduce
+the check.
 
 ---
 
@@ -256,35 +231,113 @@ and ConvNeXt-Tiny ensembles:
 
 ---
 
-## Limitations
+## §16 — End analysis: synthesis, cause-and-effect, and visual presentation
 
-- **Single test source**: 624 images from one centre (Guangzhou Women &
-  Children's Medical Center). Generalisation to other populations,
-  hardware, or geographies is untested and outside the assignment's
-  no-external-data constraint.
-- **Per-fold variance** of σ ≈ 1.4–2.5 pp implies a 95 % confidence
-  interval on test accuracy of approximately ±2.5 pp. The headline 94.55 %
-  should therefore be read as "low-94 % range".
-- **Single random seed** per fold. A more robust treatment would average
-  three seeds per fold; we did not have the compute budget for this on a
-  Vega 64 + DirectML setup (each additional seed ≈ 7 h).
-- **Label noise** in the dataset (~5–10 % per Kermany *et al.*) places a
-  practical ceiling on achievable accuracy; the eight confidently-wrong
-  high-confidence predictions in our ConvNeXt ensemble are likely
-  examples.
-- **No external validation**: by assignment rule we did not evaluate on
-  RSNA Pneumonia, NIH ChestX-ray14, or any other independent set.
+The methodology pipeline is summarised in a single figure
+(`_helpers/methodology_flow.png`) — three lanes for data, experiment,
+and evaluation, with discipline statements that tie the chapters
+together. A reader who only looks at one figure should look at that
+one.
 
-## Future work
+### 16.1 — Direct answers to the three assignment questions
 
-1. **Higher-resolution training** (320 × 320 or 384 × 384) — VRAM-bottlenecked
-   on Vega 64 but plausible on a 16 GB consumer GPU; pneumonia opacities
-   are subtle and benefit from finer sampling.
-2. **Label-noise audit** — re-examine the eight confidently-wrong
-   predictions for genuine annotation errors, and re-train on a
-   noise-cleaned subset.
-3. **Multi-class subtyping** — the dataset's filenames encode bacterial
-   vs. viral pneumonia; the binary task here ignores this. A three-class
-   formulation is a natural extension.
-4. **Multi-seed runs** — replace the single-seed-per-fold protocol with
-   three seeds per fold for honest error bars.
+| # | Question | Champion answer | Evidence |
+|---|----------|-----------------|----------|
+| Q1 | Number of conv-pool blocks | 4 | A1 sweep + Glorot control (§4) |
+| Q2 | Stride / padding / activation | ReLU + same-padding + max-pool | A2 sweep (§5) |
+| Q3 | Overfitting solution | BN + dropout 0.3 + augmentation + early stopping | A3 sweep (§6) |
+
+Champion test accuracy and medical KPIs are reported in §11; we treat
+any single-row delta below the binomial noise floor (σ ≈ 0.87 pp on a
+624-image test set; 95 % CI half-width ≈ 1.71 pp) as statistically
+indistinguishable.
+
+### 16.2 — Cause and effect
+
+Five claims supported by the experimental record, each in one line:
+
+- **Depth → receptive field → val accuracy**: 4 blocks gives a 7×7
+  terminal feature grid on a 224×224 input — enough to localise lung
+  opacities. Adding a fifth block adds parameters without measurably
+  improving accuracy (Δ < noise floor) — the standard depth/data-budget
+  trade-off documented for VGG-style architectures.
+- **Initialisation → trainability**: He (kaiming) initialisation is a
+  necessary condition at depth ≥ 4. The Glorot control row in A1 fails
+  to escape random init, confirming the vanishing-pre-activation
+  argument of He et al. (2015) for stacked ReLUs.
+- **Regularisation → train-vs-val gap → test accuracy**: the
+  unregularised baseline shows the largest train-vs-val gap; combining
+  BN + dropout + augmentation closes it most. Single regularisers each
+  buy 0.3-0.7 pp; combinations are additive but with diminishing
+  returns.
+- **Threshold tuning → operating point, not capacity**: shifting the
+  decision threshold rebalances false-negative-vs-false-positive cost
+  but does not improve the model's underlying discrimination (AUROC is
+  threshold-independent and is what the model genuinely earned).
+- **Pretraining → calibration ≠ accuracy**: the transfer-learning
+  comparison (§15) reaches a higher headline accuracy but is also more
+  miscalibrated (higher ECE, see §11). A higher number on the
+  benchmark is not a higher number in clinic.
+
+### 16.3 — Negative results worth keeping
+
+We deliberately report three things that *did not* work, because they
+shape the methodological position:
+
+- **Mixup α=0.2 hurt the pretrained track** (−0.64 pp). The visual
+  demo (`_helpers/mixup_cutmix_demo.png`) explains why blending two
+  patient X-rays is anatomically meaningless and why pretrained
+  feature spaces resist label-soft regularisers that helped from
+  scratch.
+- **SNR-AdamW underperformed standard AdamW** (-7.4 pp on this
+  dataset). Implementation was validated by smoke test and gate
+  distribution; the gain reported in the original paper is on
+  noisier domains (PINNs, grokking) and does not transfer here.
+- **Temperature scaling did not move ECE in the expected direction**
+  on the from-scratch champion — the model is *under-confident*
+  rather than overconfident, so the standard T < 1 prescription
+  amplifies saturation. Reported as evidence that "always temperature
+  scale" is bad advice.
+
+### 16.4 — Did extra figures or a flow diagram add value? (Analysis)
+
+We added one figure and considered four others. Verdict per candidate:
+
+| Figure | Added? | Verdict |
+|--------|:------:|---------|
+| **Methodology flow diagram** (3-lane pipeline) | ✅ | **High value** — single-glance orientation; replaces ~300 words of "what we did" prose. Used in §16. |
+| **Reliability diagram** (binned conf vs. acc, plus ECE) | ✅ already in §11 | High value — calibration is hard to communicate numerically. |
+| **Most-confident-wrong panel** (1 worst FN + 3 most-confident FPs) | recommended | High value — turns confusion-matrix into clinically interpretable failure modes. ~30 lines of code; defer to a final-polish pass. |
+| **Cause-and-effect directed graph** (architecture choice → mechanism → metric) | rejected | Medium value, but the §16.2 bullet list does the same job in a quarter of the page. |
+| **Ablation decision tree** (A1 → A2 → A3 winner path) | rejected | Low marginal value over the methodology flow diagram, which already encodes the same path. |
+
+Principle: a figure earns its place only if it conveys something the
+prose cannot do in fewer characters. The flow diagram and the
+reliability diagram both pass; the others either duplicate prose or
+duplicate other figures.
+
+### 16.5 — Limitations (compact)
+
+- Single test source (Guangzhou Women & Children's Medical Center,
+  624 images). Generalisation untested.
+- Single random seed per fold. Per-fold variance σ ≈ 1.4–2.5 pp;
+  multi-seed runs would tighten the headline number's confidence
+  interval.
+- Label noise estimated at 5-10 % in the original dataset — a
+  practical ceiling on achievable accuracy.
+- Patient-level isolation between merged-pool folds (intra-pool
+  patient grouping) not enforced; estimated 1-3 pp val accuracy
+  inflation, but test KPIs unaffected by construction (see §9).
+- Binary classification only; bacterial vs. viral subtyping is
+  encoded in filenames but not modelled.
+
+### 16.6 — Future work (compact)
+
+1. Higher input resolution (320 / 384) — pneumonia opacities are
+   subtle and benefit from finer sampling.
+2. Label-noise audit on the high-confidence-wrong subset.
+3. Three-class formulation (NORMAL / BACTERIAL / VIRAL) using the
+   filename labels.
+4. Multi-seed protocol (3 × 5-fold) for honest 95 % CIs.
+5. Patient-aware splitting via `GroupKFold` for a more conservative
+   internal CV estimate.

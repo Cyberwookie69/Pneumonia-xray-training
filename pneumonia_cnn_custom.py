@@ -92,7 +92,7 @@ class CustomCNN(nn.Module):
     def __init__(self, n_blocks: int = 4, base_channels: int = 32,
                  activation: str = "relu", padding: str = "same",
                  stride_mode: str = "pool", use_bn: bool = False,
-                 use_dropout: float = 0.0):
+                 use_dropout: float = 0.0, init: str = "kaiming"):
         super().__init__()
         blocks = []
         in_ch = 1  # grayscale X-ray
@@ -105,6 +105,33 @@ class CustomCNN(nn.Module):
         self.gap = nn.AdaptiveAvgPool2d(1)
         self.dropout = nn.Dropout(use_dropout) if use_dropout > 0 else nn.Identity()
         self.head = nn.Linear(in_ch, 1)
+
+        # Initialise convs. PyTorch defaults to kaiming_uniform_ already, but
+        # we make the choice explicit and offer Glorot as a controlled
+        # comparison (He et al. 2015 argue Glorot fails with stacked ReLUs,
+        # producing vanishing pre-activations at depth ≥ 4).
+        self._apply_init(init, activation)
+
+    def _apply_init(self, init: str, activation: str):
+        nonlinearity = "relu" if activation in ("relu", "leaky") else "linear"
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                if init == "kaiming":
+                    nn.init.kaiming_normal_(m.weight, mode="fan_out",
+                                             nonlinearity=nonlinearity)
+                elif init == "glorot":
+                    nn.init.xavier_uniform_(m.weight)
+                else:
+                    raise ValueError(f"Unknown init: {init}")
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                # Output layer always gets Glorot — the lecture-notes rule
+                # that regularisation/init for ReLU doesn't apply to the
+                # final sigmoid head.
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, x):
         x = self.features(x)
@@ -209,6 +236,10 @@ def parse_args():
     p.add_argument("--activation", choices=["relu", "leaky", "gelu"], default="relu")
     p.add_argument("--padding", choices=["same", "valid"], default="same")
     p.add_argument("--stride_mode", choices=["pool", "strided"], default="pool")
+    p.add_argument("--init", choices=["kaiming", "glorot"], default="kaiming",
+                   help="Conv weight init. 'kaiming' (He, default) is the "
+                        "standard for stacked ReLUs; 'glorot' (Xavier) is "
+                        "kept as a controlled comparison for the depth ablation.")
     # Overfitting controls (Q3)
     p.add_argument("--use_bn", action="store_true",
                    help="add BatchNorm after each conv")
@@ -299,7 +330,7 @@ def main():
         n_blocks=args.n_blocks, base_channels=args.base_channels,
         activation=args.activation, padding=args.padding,
         stride_mode=args.stride_mode, use_bn=args.use_bn,
-        use_dropout=args.use_dropout,
+        use_dropout=args.use_dropout, init=args.init,
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {n_params:,}")
@@ -360,7 +391,8 @@ def main():
             "n_blocks": args.n_blocks, "base_channels": args.base_channels,
             "activation": args.activation, "padding": args.padding,
             "stride_mode": args.stride_mode, "use_bn": args.use_bn,
-            "use_dropout": args.use_dropout, "n_params": n_params,
+            "use_dropout": args.use_dropout, "init": args.init,
+            "n_params": n_params,
         },
         "regularization": {
             "weight_decay": args.weight_decay, "augment": args.augment,
