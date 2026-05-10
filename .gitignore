@@ -28,6 +28,12 @@ top_notebooks/
 # Archived pre-academic-refocus snapshot (heavy run artefacts; see archief2/README.md)
 archief2/
 
+# Personal Drive folder URL for pull_colab_runs.ps1 (per-user, not source)
+.colab_drive_url
+
+# Pulled Colab artefacts (timestamped output dirs)
+colab_output_*/
+
 # Logs (data is captured in summary.json files)
 logs/
 *.log
