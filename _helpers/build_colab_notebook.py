@@ -53,13 +53,13 @@ CELLS = [
         "## Time estimate (H100)\n"
         "- Setup + dataset: ~3 min (network-bound, unchanged across GPUs)\n"
         "- Smoke test: ~30 s\n"
-        "- A1 depth ablation (4 rows × 20 epochs): ~7 min\n"
-        "- A2 stride/padding/activation (6 rows): ~11 min\n"
-        "- A3 overfitting (6 rows): ~11 min\n"
+        "- A1 depth ablation (4 rows × 20 epochs): ~6 min\n"
+        "- A2 stride/padding/activation (6 rows): ~9 min\n"
+        "- A3 overfitting (6 rows): ~9 min\n"
         "- Champion 5-fold + KPIs + curves + Grad-CAM: ~10 min\n"
         "- Mixup demo (display): instant\n"
         "- Transfer-learning bonus (ResNet50 @ 288, 5-fold + eval): ~8 min\n"
-        "- **Total: ~50 min on H100** (with bonus); ~40 min without §15.\n"
+        "- **Total: ~45 min on H100** (with bonus); ~35 min without §15.\n"
         "\n"
         "*Reference for context*: same pipeline takes ~3 h on free T4, ~1 h on A100, "
         "~30+ h on AMD Vega 64 + DirectML.\n"
@@ -131,7 +131,7 @@ CELLS = [
         "we burn time on the ablations. 5 epochs only, default 4-block ReLU CNN."
     ),
     code(
-        "!python pneumonia_cnn_custom.py --run_name smoke_test --epochs 5 --num_workers 2"
+        "!python pneumonia_cnn_custom.py --run_name smoke_test --epochs 5 --num_workers 6"
     ),
     md(
         "---\n"
@@ -156,7 +156,7 @@ CELLS = [
         "    subprocess.run(cmd, check=True)\n"
         "\n"
         "for n in [2, 3, 4, 5]:\n"
-        "    run_if_missing(f'a1_d{n}', ['--n_blocks', str(n), '--epochs', '20', '--num_workers', '2'])"
+        "    run_if_missing(f'a1_d{n}', ['--n_blocks', str(n), '--epochs', '20', '--num_workers', '6'])"
     ),
     code(
         "# Collect A1 results into one table\n"
@@ -207,7 +207,7 @@ CELLS = [
         "    run_if_missing(name, ['--n_blocks', str(best_n),\n"
         "                          '--activation', act, '--padding', pad,\n"
         "                          '--stride_mode', sm,\n"
-        "                          '--epochs', '20', '--num_workers', '2'])"
+        "                          '--epochs', '20', '--num_workers', '6'])"
     ),
     code(
         "# A2 results table\n"
@@ -239,7 +239,7 @@ CELLS = [
         "print(f'A2 winner: act={act}, pad={pad}, stride_mode={sm} (test_acc={best_acc:.4f})')\n"
         "\n"
         "BASE = ['--n_blocks', str(best_n), '--activation', act, '--padding', pad,\n"
-        "        '--stride_mode', sm, '--epochs', '20', '--num_workers', '2']\n"
+        "        '--stride_mode', sm, '--epochs', '20', '--num_workers', '6']\n"
         "\n"
         "A3_RUNS = [\n"
         "    ('a3_none',    BASE),\n"
