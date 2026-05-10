@@ -50,9 +50,13 @@ from pneumonia_train import DATA_ROOT, OUT_DIR, get_device, list_images
 
 
 def make_activation(name: str) -> nn.Module:
+    # inplace=False is required for the Grad-CAM cell's backward hook to work.
+    # Inplace ReLU modifies a view of the conv output, which clashes with
+    # `register_full_backward_hook` on that conv. Mathematically identical to
+    # the inplace variant, so existing checkpoints remain valid.
     return {
-        "relu": nn.ReLU(inplace=True),
-        "leaky": nn.LeakyReLU(0.1, inplace=True),
+        "relu": nn.ReLU(inplace=False),
+        "leaky": nn.LeakyReLU(0.1, inplace=False),
         "gelu": nn.GELU(),
     }[name]
 
