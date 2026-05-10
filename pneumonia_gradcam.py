@@ -38,7 +38,7 @@ def parse_args():
                    help="single image path to visualise; if omitted, samples N from test set")
     p.add_argument("--n_samples", type=int, default=6,
                    help="number of test images to visualise (when --image is omitted)")
-    p.add_argument("--seed", type=int, default=72)
+    p.add_argument("--seed", type=int, default=78)
     p.add_argument("--img_size", type=int, default=224)
     p.add_argument("--out_subdir", default="gradcam",
                    help="subdir inside the run dir to save heatmaps to")

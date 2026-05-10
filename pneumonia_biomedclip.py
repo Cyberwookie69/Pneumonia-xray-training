@@ -30,7 +30,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--run_name", default="biomedclip_ensemble")
     p.add_argument("--n_folds", type=int, default=5)
-    p.add_argument("--seed", type=int, default=72)
+    p.add_argument("--seed", type=int, default=78)
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--num_workers", type=int, default=4)
     p.add_argument("--feature_cache", default=None)

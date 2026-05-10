@@ -90,6 +90,11 @@ and may be off by a few minutes.
 
 ## 2026-05-10
 
+### Default seed bumped 72 → 78 (no additional invalidation)
+- Same set of files as the 42 → 72 change below; no runs were trained
+  under seed=72 in between, so this is effectively a single 42 → 78
+  change as far as cached results are concerned.
+
 ### Default seed flipped 42 → 72 — INVALIDATES every prior summary.json
 - Changed default `--seed` from 42 to 72 in: `pneumonia_train.py`,
   `pneumonia_cnn_custom.py`, `pneumonia_biomedclip.py`, `pneumonia_rad_dino.py`,

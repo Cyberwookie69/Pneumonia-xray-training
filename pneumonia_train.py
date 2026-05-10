@@ -96,7 +96,7 @@ def parse_args():
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--n_folds", type=int, default=1, help="1 = single 90/10 split. >1 = stratified k-fold.")
     p.add_argument("--fold", type=int, default=0)
-    p.add_argument("--seed", type=int, default=72)
+    p.add_argument("--seed", type=int, default=78)
     p.add_argument("--num_workers", type=int, default=4)
     p.add_argument("--focal_gamma", type=float, default=2.0)
     p.add_argument("--focal_alpha", type=float, default=0.25)
