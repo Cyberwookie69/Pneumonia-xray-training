@@ -61,8 +61,9 @@ CELLS = [
         "- Champion 5-fold + KPIs + curves + Grad-CAM: ~10 min\n"
         "- Mixup demo (display): instant\n"
         "- Transfer-learning comparison (ResNet50 @ 288, 5-fold + eval): ~8 min\n"
-        "- RAD-DINO linear probe (medical-domain pretrained features): ~5 min\n"
-        "- **Total: ~50 min on H100**\n"
+        "- BiomedCLIP linear probe (PubMed-domain features): ~4 min\n"
+        "- RAD-DINO linear probe (chest-X-ray-domain features): ~5 min\n"
+        "- **Total: ~55 min on H100**\n"
         "\n"
         "*Reference for context*: same pipeline takes ~3 h on free T4, ~1 h on A100, "
         "~30+ h on AMD Vega 64 + DirectML.\n"
@@ -489,7 +490,39 @@ CELLS = [
 
     md(
         "---\n"
-        "## 16. Transfer learning — RAD-DINO (medical-domain pretrained)\n"
+        "## 16. Transfer learning — BiomedCLIP (vision-language, biomedical literature pretrained)\n"
+        "\n"
+        "Linear-probe baseline using **BiomedCLIP** (Microsoft, 2023), a CLIP-style "
+        "vision-language model pretrained on ~15M biomedical image-text pairs from "
+        "PubMed Open Access. We use only the image encoder, frozen, plus a 5-fold "
+        "logistic regression head — the standard linear-probe protocol.\n"
+        "\n"
+        "**No architecture ablation here**: BiomedCLIP is a fixed pretrained black-box. "
+        "Our only tuning surface is the classifier head's regularisation (`C` parameter) "
+        "and feature preprocessing.\n"
+        "\n"
+        "**Leakage caveat**: BiomedCLIP was pretrained on biomedical literature images "
+        "from PubMed — illustrations, microscopy, charts, occasional X-rays. Direct "
+        "image overlap with the Kermany dataset is unlikely but distribution-level "
+        "exposure to chest X-ray statistics is plausible. Less acute than RAD-DINO's "
+        "leakage risk (see §17), but worth noting."
+    ),
+    code(
+        "# Install open_clip_torch — BiomedCLIP uses the open_clip API\n"
+        "!pip install -q open_clip_torch"
+    ),
+    code(
+        "# Linear-probe BiomedCLIP — features cached on Drive after first run.\n"
+        "!python pneumonia_biomedclip.py --run_name biomedclip_ensemble"
+    ),
+    code(
+        "# Medical KPIs on the BiomedCLIP ensemble\n"
+        "!python _helpers/medical_kpis.py --run $PNEUMONIA_RUNS/biomedclip_ensemble"
+    ),
+
+    md(
+        "---\n"
+        "## 17. Transfer learning — RAD-DINO (medical-domain pretrained)\n"
         "\n"
         "Linear-probe baseline using **RAD-DINO** (Microsoft, 2024), a Vision Transformer "
         "pretrained on ~877K chest X-rays from MIMIC-CXR, CheXpert, PadChest, NIH ChestX-ray14, "
@@ -545,7 +578,7 @@ CELLS = [
         "data: an ablation row that hasn't been trained yet shows as a dash."
     ),
     md(
-        "## 17. Methodology overview\n"
+        "## 18. Methodology overview\n"
         "\n"
         "A five-stage pipeline. The test set is held out from every tuning decision "
         "until the final eval; ablations only apply to tracks where we have control "
@@ -725,7 +758,24 @@ CELLS = [
         "            print('\\n(RUN_CODE=False — set to True above to execute.)')"
     ),
     md(
-        "## 18. A1 — Depth ablation\n"
+        "## 19. Metric glossary\n"
+        "\n"
+        "| Symbol / term | What it measures | Formula |\n"
+        "|---------------|-----------------|----------|\n"
+        "| **τ (tau)** | classification threshold on the sigmoid output: P(Pneumonia) ≥ τ ⇒ predict Pneumonia. Default τ=0.5 | — |\n"
+        "| **Accuracy** | fraction of correct predictions over the **whole** test set | (TP + TN) / N |\n"
+        "| **Sensitivity** (recall on Pneumonia) | of all true Pneumonia cases, how many did we catch? Critical for medical screening (don't miss disease) | TP / (TP + FN) |\n"
+        "| **Specificity** (recall on Normal) | of all true Normal cases, how many did we correctly clear? Drives false-alarm rate | TN / (TN + FP) |\n"
+        "| **AUROC** | area under the ROC curve. Threshold-*independent* discrimination quality. 0.5 = random, 1.0 = perfect | — |\n"
+        "| **ECE** (Expected Calibration Error) | gap between predicted confidence and actual accuracy, averaged over confidence bins. Lower = better calibrated. <0.05 = well calibrated | Σ ⎮acc(b) − conf(b)⎮ · n(b)/N |\n"
+        "\n"
+        "*Why both sensitivity and specificity?* Accuracy hides which **direction** "
+        "your errors go. In a screening setting, missing a Pneumonia (false negative) "
+        "is much worse than a false alarm. Splitting accuracy into sensitivity (FN-rate) "
+        "and specificity (FP-rate) makes that trade-off visible — and tunable via τ."
+    ),
+    md(
+        "## 20. A1 — Depth ablation\n"
         "\n"
         "Number of conv-pool blocks. Glorot init at the winning depth is included as "
         "a controlled comparison: He init is a necessary condition at depth ≥ 4 for "
@@ -774,7 +824,7 @@ CELLS = [
         "    print(f'\\nA1 winner (test): {best_n} blocks at {max(accs):.4f}')"
     ),
     md(
-        "## 19. A2 — Stride / padding / activation\n"
+        "## 21. A2 — Stride / padding / activation\n"
         "\n"
         "Six representative variants at the A1 winning depth. Activation, padding, and "
         "stride-mode are varied; everything else held constant."
@@ -808,7 +858,7 @@ CELLS = [
         "    print(f'\\nA2 winner: {winner[0]} at {winner[1]:.4f}')"
     ),
     md(
-        "## 20. A3 — Regularisation\n"
+        "## 22. A3 — Regularisation\n"
         "\n"
         "Train-vs-val gap is the diagnostic for overfitting; a wide gap means the model "
         "memorises training data instead of generalising. The combination row is expected "
@@ -845,7 +895,7 @@ CELLS = [
         "          f'(train-val gap {winner[1]-winner[2]:+.3f})')"
     ),
     md(
-        "## 21. Mixup / CutMix / Manifold Mixup demo\n"
+        "## 23. Mixup / CutMix / Manifold Mixup demo\n"
         "\n"
         "Mixup α=0.2 on a pretrained backbone lost 0.64 pp test accuracy in our experiments. "
         "Pretrained class boundaries are already calibrated, so blending samples adds noise "
@@ -862,7 +912,7 @@ CELLS = [
         "    print('Demo image not found — re-run after dataset has been downloaded.')"
     ),
     md(
-        "## 22. Champion ensemble — medical KPIs\n"
+        "## 24. Champion ensemble — medical KPIs\n"
         "\n"
         "Five-fold custom-CNN ensemble. Reports the four KPIs at three operating points: "
         "default τ=0.5, val-tuned best-accuracy τ, and sensitivity-targeted τ ≥ 0.97."
@@ -899,15 +949,19 @@ CELLS = [
         "        ax.legend(loc='upper left'); plt.tight_layout(); plt.show()"
     ),
     md(
-        "## 23. Transfer-learning baselines — medical KPIs\n"
+        "## 25. Transfer-learning baselines — medical KPIs\n"
         "\n"
-        "Two transfer-learning approaches: **ResNet50 + ImageNet** (full fine-tune, generic "
-        "pretraining) and **RAD-DINO + linear probe** (frozen features, medical-domain "
-        "pretraining). RAD-DINO numbers carry the leakage caveat from §16."
+        "Three transfer-learning approaches with **explicitly different ablation depth**:\n"
+        "- **ResNet50 + ImageNet** — generic pretraining, *full fine-tune* (LR/batch tuned)\n"
+        "- **BiomedCLIP** — biomedical literature pretraining, *frozen features + linear probe*\n"
+        "- **RAD-DINO** — chest-X-ray pretraining, *frozen features + linear probe*\n"
+        "\n"
+        "BiomedCLIP and RAD-DINO numbers carry the leakage caveats from §16 and §17."
     ),
     code(
         "for label, run_name in [('ResNet50 + ImageNet (full fine-tune)', 'ensemble'),\n"
-        "                         ('RAD-DINO + linear probe (medical pretraining)', 'rad_dino_ensemble')]:\n"
+        "                         ('BiomedCLIP + linear probe (PubMed pretraining)', 'biomedclip_ensemble'),\n"
+        "                         ('RAD-DINO + linear probe (chest-X-ray pretraining)', 'rad_dino_ensemble')]:\n"
         "    path = f'{RUNS_ROOT}/{run_name}/medical_kpis.json'\n"
         "    print(f'\\n=== {label} ===')\n"
         "    if not os.path.exists(path):\n"
@@ -922,17 +976,18 @@ CELLS = [
         "              f'{op[\"sensitivity\"]:>8.4f}{op[\"specificity\"]:>8.4f}')"
     ),
     md(
-        "## 24. Headline comparison — 4 KPIs across approaches\n"
+        "## 26. Headline comparison — 4 KPIs across approaches\n"
         "\n"
         "Single comparison figure: each approach × four KPIs. Best-accuracy threshold "
         "is used for sensitivity and specificity (the natural single-point summary). "
-        "The **leakage caveat from §16** applies to the RAD-DINO bar in particular."
+        "Leakage caveats from §16 and §17 apply to the BiomedCLIP and RAD-DINO bars."
     ),
     code(
         "approaches = [\n"
         "    ('Custom CNN (from scratch, 5-fold)',                  f'{RUNS_ROOT}/champion_ensemble/medical_kpis.json'),\n"
         "    ('ResNet50 + ImageNet (generic pretraining, 5-fold)',  f'{RUNS_ROOT}/ensemble/medical_kpis.json'),\n"
-        "    ('RAD-DINO linear probe (medical pretraining, 5-fold)',f'{RUNS_ROOT}/rad_dino_ensemble/medical_kpis.json'),\n"
+        "    ('BiomedCLIP probe (PubMed pretraining, 5-fold)',      f'{RUNS_ROOT}/biomedclip_ensemble/medical_kpis.json'),\n"
+        "    ('RAD-DINO probe (chest-X-ray pretraining, 5-fold)',   f'{RUNS_ROOT}/rad_dino_ensemble/medical_kpis.json'),\n"
         "]\n"
         "loaded = []\n"
         "for label, path in approaches:\n"
@@ -980,7 +1035,7 @@ CELLS = [
         "              f'{1 - app[\"one_minus_ece\"]:>8.4f}')"
     ),
     md(
-        "## 25. Conclusion\n"
+        "## 27. Conclusion\n"
         "\n"
         "**What worked.**\n"
         "- A 4-block ReLU CNN with same-padding and max-pool gives a solid from-scratch "
@@ -994,8 +1049,9 @@ CELLS = [
         "retraining; the model's underlying discrimination (AUROC) is unchanged.\n"
         "- Generic pretraining (ImageNet) raises the headline accuracy but does not "
         "necessarily improve calibration (ECE).\n"
-        "- Domain-matched pretraining (RAD-DINO, ~877K chest X-rays) typically gives "
-        "another step up over generic pretraining — *with the leakage caveat below*.\n"
+        "- Biomedical-literature pretraining (BiomedCLIP, ~15M PubMed image-text pairs) "
+        "and chest-X-ray-specific pretraining (RAD-DINO, ~877K chest X-rays) typically "
+        "give another step up over generic pretraining — *with the leakage caveats below*.\n"
         "\n"
         "**What did not work.**\n"
         "- Mixup α=0.2 on a pretrained backbone lost 0.64 pp — pretrained class boundaries "
@@ -1010,16 +1066,27 @@ CELLS = [
         "Numerical overlap of 170 PNE person-IDs between train and test is an artefact of "
         "per-split renumbering, not real leakage.\n"
         "\n"
-        "**RAD-DINO leakage caveat.** RAD-DINO's pretraining set (MIMIC-CXR, CheXpert, "
-        "PadChest, NIH ChestX-ray14, BRAX, VinDr-CXR) does not list the Kermany 2018 "
-        "dataset, so direct image overlap with our test set is unlikely. Distribution-level "
-        "overlap, however, is plausible: chest X-ray datasets share acquisition protocols, "
-        "equipment, and anatomy distributions. RAD-DINO's reported KPIs should therefore "
-        "be read as an upper-bound indication of medical-domain transfer, not as a "
-        "directly comparable point with the from-scratch and ImageNet baselines."
+        "**Leakage caveats — medical-domain pretraining.**\n"
+        "- *RAD-DINO* was pretrained on MIMIC-CXR, CheXpert, PadChest, NIH ChestX-ray14, "
+        "BRAX, and VinDr-CXR — chest X-ray datasets that share acquisition protocols and "
+        "anatomy distributions with Kermany. The Kermany dataset itself is not in the list, "
+        "but distribution-level overlap is plausible.\n"
+        "- *BiomedCLIP* was pretrained on ~15M image-text pairs from PubMed Open Access — "
+        "mostly biomedical literature illustrations, microscopy and figure panels rather "
+        "than direct chest X-rays. Less acute leakage risk than RAD-DINO, but still warrants "
+        "a caveat.\n"
+        "- *Reading the KPIs*: BiomedCLIP and RAD-DINO numbers should be interpreted as "
+        "upper-bound indications of medical-domain transfer, not as directly comparable "
+        "points with the from-scratch and ImageNet baselines.\n"
+        "\n"
+        "**Heterogeneous ablation depth across approaches**: only the custom CNN track has "
+        "deep architectural ablation (A1/A2/A3). The pretrained tracks are fixed black-box "
+        "feature extractors or fine-tuned with shallow hyperparameter tuning only — their "
+        "architecture is not ours to design. This asymmetry is intentional and reflected "
+        "in §16-§17 cell descriptions and the methodology flow diagram (Stage 3)."
     ),
     md(
-        "## 26. Future work\n"
+        "## 28. Future work\n"
         "\n"
         "1. **Higher input resolution** (320 / 384) — pneumonia opacities are subtle and "
         "may benefit from finer sampling.\n"
