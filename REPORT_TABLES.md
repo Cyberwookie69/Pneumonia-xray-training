@@ -80,7 +80,6 @@ were already more consistent.
 | Talo 2019 — ResNet-152 | 97.4 % | −2.85 % |
 | Bharati *et al.* 2020 — VGG-derived | 98.1 % | −3.55 % |
 | Top-100 Kaggle notebooks, median test acc (after audit-correction for re-split tricks) | ~93 % | **+1.55 %** |
-| Liverpool deep-learning finalproject — 4-block from-scratch CNN, 2024-25 (their "test" was a re-split of the train folder) | 71.79 % on the *official* test set / 97.6 % on their re-split | **+22.76 %** on the official set |
 | **This work** — multi-arch ensemble, threshold-tuned | **94.55 %** | — |
 
 We hold above the median of the public Kaggle community after auditing for
@@ -107,15 +106,18 @@ train-distribution metric — same class prior (~74 % PNE), no held-out
 distribution shift — and roughly comparable to evaluating on training
 data.
 
-A more subtle variant affects the Liverpool deep-learning finalproject (a
-peer custom-CNN submission). Their split code correctly identifies
-`splits["test"]` as the official `/test` folder, but every ablation
-table reports `val_acc` from a re-split of train + the (tiny) official
-val. The value 0.9761 propagates through the project as the headline
-result. When the champion model is finally evaluated on the official
-test, accuracy collapses to **0.7179** — a 25.8 pp gap that should have
-been a red flag for distribution mismatch but is not addressed in their
-report.
+A more subtle methodological pitfall worth flagging — distinct from the
+re-split tactic above — is *reporting `val_acc` as the headline metric*
+when val has been reconstructed from the (merged train + tiny official
+val) pool. Such a val sits in the training distribution: same class
+prior, same scanner population, possible patient-level overlap with
+training. A model selected on this val can show a large val-vs-test gap
+once it is finally evaluated on the held-out official test set. Even
+when the val→test gap is only 1-3 pp under proper patient isolation,
+gaps of 20+ pp are observed when val is contaminated. The defensive
+practice — and the one we follow throughout this work — is to keep
+test untouched until the final evaluation and to report it, not val,
+as the headline result.
 
 To confirm that **our** reported test KPIs are honest, we verified
 patient isolation by parsing filename conventions across all three
