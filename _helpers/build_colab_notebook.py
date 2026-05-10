@@ -58,8 +58,8 @@ CELLS = [
         "- A3 overfitting (6 rows): ~9 min\n"
         "- Champion 5-fold + KPIs + curves + Grad-CAM: ~10 min\n"
         "- Mixup demo (display): instant\n"
-        "- Transfer-learning bonus (ResNet50 @ 288, 5-fold + eval): ~8 min\n"
-        "- **Total: ~45 min on H100** (with bonus); ~35 min without §15.\n"
+        "- Transfer-learning comparison (ResNet50 @ 288, 5-fold + eval): ~8 min\n"
+        "- **Total: ~45 min on H100**\n"
         "\n"
         "*Reference for context*: same pipeline takes ~3 h on free T4, ~1 h on A100, "
         "~30+ h on AMD Vega 64 + DirectML.\n"
@@ -423,22 +423,28 @@ CELLS = [
     ),
     md(
         "---\n"
-        "## 15. Bonus — transfer learning baseline (off-spec for the assignment, on-spec for context)\n"
+        "## 15. Transfer-learning comparison (ResNet50 + ImageNet)\n"
         "\n"
-        "The assignment asks us to design our own CNN. We also report a single transfer-learning "
-        "run (ResNet50 + ImageNet) for context — to quantify how much pretrained features add on "
-        "top of from-scratch design choices. Reported in §7 as a comparison baseline, not a "
-        "headline result. Skip this cell if you're tight on session time."
+        "5-fold ResNet50 fine-tuned from ImageNet weights at image size 288. Quantifies "
+        "how much pretrained features add on top of our from-scratch design choices. "
+        "Reported in §7 of the report as a comparison baseline — *not* a headline result, "
+        "since the assignment asks us to design our own CNN.\n"
+        "\n"
+        "**Why it stays on the standard pipeline**: the ~8 min cost on H100 is small compared "
+        "to the strength of the resulting comparison ('our 4-block CNN reaches X% from scratch; "
+        "with ImageNet pretraining the same project reaches Y%')."
     ),
     code(
-        "# 5-fold ResNet50 + ImageNet pretrained, ~25 min on T4.\n"
-        "# Runs through the legacy pipeline. Result is the 'transfer learning' row in §7.\n"
-        "!python pneumonia_run_folds.py --pretrained --extra='--img_size 288 --num_workers 4'"
+        "# 5-fold ResNet50 + ImageNet pretrained, ~7 min on H100.\n"
+        "# pneumonia_run_folds.py auto-skips folds with an existing summary.json,\n"
+        "# so re-running is free if Drive already holds prior results.\n"
+        "!python pneumonia_run_folds.py --pretrained --extra='--img_size 288 --num_workers 6'"
     ),
     code(
-        "# Eval the transfer-learning ensemble (uses pneumonia_eval.py — for timm models only)\n"
+        "# Eval the transfer-learning ensemble + medical KPIs\n"
         "!python pneumonia_eval.py --ensemble ens_f0,ens_f1,ens_f2,ens_f3,ens_f4 \\\n"
-        "    --use_best --num_workers 0 --img_size 288"
+        "    --use_best --num_workers 0 --img_size 288\n"
+        "!python _helpers/medical_kpis.py --run $PNEUMONIA_RUNS/ensemble"
     ),
 ]
 
