@@ -1,4 +1,4 @@
-"""Generate an infographic showing Mixup and CutMix on real chest X-rays."""
+"""Generate an infographic showing Mixup, CutMix and Manifold Mixup on real chest X-rays."""
 import random
 from pathlib import Path
 
@@ -44,11 +44,41 @@ cutmix[cy:cy+cut_h, cx:cx+cut_w] = B[cy:cy+cut_h, cx:cx+cut_w]
 area_b = (cut_w * cut_h) / (IMG_SIZE * IMG_SIZE)
 label_cut = f"{1-area_b:.2f}*NORMAL + {area_b:.2f}*PNEUMONIA"
 
-# Plot
-fig, axes = plt.subplots(2, 3, figsize=(13, 9))
-fig.suptitle("Mixup vs. CutMix on Chest X-rays", fontsize=18, fontweight="bold", y=0.98)
+# Manifold Mixup: blend in feature space, NOT pixel space.
+# True implementation: forward A and B through k layers, mix activations, then
+# continue forward. Here we proxy "feature-space" with a 14x14 downsample
+# (the spatial size of the last conv block in a 224-input ResNet50), blend
+# at that resolution, then upsample for display. Conveys the key idea that
+# mixing happens at a coarse, abstract grid — fine pixel-level features are
+# already gone by the time we mix.
+FEAT_RES = 14
+LAM_MAN = 0.6
 
-# Top row: Mixup
+
+def to_feat(img):
+    pil = Image.fromarray((img * 255).astype(np.uint8))
+    pil = pil.resize((FEAT_RES, FEAT_RES), Image.BILINEAR)
+    return np.array(pil, dtype=np.float32) / 255.0
+
+
+def upsample(feat):
+    pil = Image.fromarray((feat * 255).astype(np.uint8))
+    pil = pil.resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+    return np.array(pil, dtype=np.float32) / 255.0
+
+
+A_feat = to_feat(A)
+B_feat = to_feat(B)
+manifold_feat = LAM_MAN * A_feat + (1 - LAM_MAN) * B_feat
+manifold_vis = upsample(manifold_feat)
+label_man = f"{LAM_MAN:.1f}*NORMAL + {1-LAM_MAN:.1f}*PNEUMONIA"
+
+# Plot
+fig, axes = plt.subplots(3, 3, figsize=(13, 13))
+fig.suptitle("Mixup vs. CutMix vs. Manifold Mixup on Chest X-rays",
+             fontsize=18, fontweight="bold", y=0.99)
+
+# ── Row 1: Mixup ───────────────────────────────────────────────────────────
 axes[0, 0].imshow(A, cmap="gray", vmin=0, vmax=1)
 axes[0, 0].set_title("Image A — NORMAL\nlabel = 0", fontsize=12)
 axes[0, 0].axis("off")
@@ -62,9 +92,8 @@ axes[0, 2].set_title(f"MIXUP (λ={LAM_MIX})\nλ·A + (1-λ)·B\nlabel = {1-LAM_M
                      fontsize=12, color="darkred")
 axes[0, 2].axis("off")
 
-# Bottom row: CutMix (same A and B, but with cut)
+# ── Row 2: CutMix ──────────────────────────────────────────────────────────
 axes[1, 0].imshow(A, cmap="gray", vmin=0, vmax=1)
-# Draw rectangle showing the cut region
 rect = plt.Rectangle((cx, cy), cut_w, cut_h, linewidth=2,
                      edgecolor="red", facecolor="none", linestyle="--")
 axes[1, 0].add_patch(rect)
@@ -86,19 +115,42 @@ axes[1, 2].set_title(f"CUTMIX (area_B={area_b:.2f})\nlabel = {area_b:.2f}",
                      fontsize=12, color="darkred")
 axes[1, 2].axis("off")
 
+# ── Row 3: Manifold Mixup ──────────────────────────────────────────────────
+axes[2, 0].imshow(upsample(A_feat), cmap="gray", vmin=0, vmax=1,
+                  interpolation="nearest")
+axes[2, 0].set_title(f"f_A — features of A\nat hidden layer ({FEAT_RES}×{FEAT_RES} grid)",
+                     fontsize=12)
+axes[2, 0].axis("off")
+
+axes[2, 1].imshow(upsample(B_feat), cmap="gray", vmin=0, vmax=1,
+                  interpolation="nearest")
+axes[2, 1].set_title(f"f_B — features of B\nat hidden layer ({FEAT_RES}×{FEAT_RES} grid)",
+                     fontsize=12)
+axes[2, 1].axis("off")
+
+axes[2, 2].imshow(manifold_vis, cmap="gray", vmin=0, vmax=1,
+                  interpolation="nearest")
+axes[2, 2].set_title(f"MANIFOLD MIXUP (λ={LAM_MAN})\nλ·f_A + (1-λ)·f_B\n"
+                     f"then forward through rest of net\nlabel = {1-LAM_MAN:.1f}",
+                     fontsize=11, color="darkred")
+axes[2, 2].axis("off")
+
 # Side annotations
-fig.text(0.02, 0.73, "MIXUP",
+fig.text(0.02, 0.82, "MIXUP",
          fontsize=14, fontweight="bold", rotation=90, va="center", color="darkred")
-fig.text(0.02, 0.27, "CUTMIX",
+fig.text(0.02, 0.50, "CUTMIX",
          fontsize=14, fontweight="bold", rotation=90, va="center", color="darkred")
+fig.text(0.02, 0.18, "MANIFOLD\nMIXUP",
+         fontsize=12, fontweight="bold", rotation=90, va="center", color="darkred")
 
 # Footer with key insight
-fig.text(0.5, 0.02,
-         "Both produce 'unrealistic' images — yet both reliably improve generalization.\n"
-         "The label becomes a soft target (a number between 0 and 1).",
+fig.text(0.5, 0.015,
+         "All three produce 'unrealistic' samples — yet all reliably improve generalization.\n"
+         "Manifold Mixup mixes hidden activations, not pixels (shown here as a 14×14 proxy);\n"
+         "the label becomes a soft target between 0 and 1.",
          ha="center", fontsize=11, style="italic", color="gray")
 
-plt.tight_layout(rect=[0.03, 0.05, 1, 0.95])
+plt.tight_layout(rect=[0.03, 0.05, 1, 0.96])
 plt.savefig(OUT_PATH, dpi=110, bbox_inches="tight", facecolor="white")
 print(f"Saved: {OUT_PATH}")
 print(f"  Image A: {img_a_path.name}")

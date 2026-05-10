@@ -25,6 +25,9 @@ data/
 _competitor/
 top_notebooks/
 
+# Archived pre-academic-refocus snapshot (heavy run artefacts; see archief2/README.md)
+archief2/
+
 # Logs (data is captured in summary.json files)
 logs/
 *.log
