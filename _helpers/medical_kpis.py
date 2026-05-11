@@ -32,6 +32,37 @@ def metrics_at(probs, labels, threshold):
             "specificity": spec, "tp": tp, "tn": tn, "fp": fp, "fn": fn}
 
 
+def fit_temperature(val_probs, val_labels, bounds=(0.5, 20.0)):
+    """Fit a single scalar T on validation by minimising binary NLL.
+
+    Standard Platt-style post-hoc calibration. Returns the optimal T.
+    T == 1 means no rescaling. T > 1 softens overconfident predictions;
+    T < 1 sharpens under-confident ones.
+    """
+    from scipy.optimize import minimize_scalar
+    eps = 1e-7
+    val_probs = np.clip(np.asarray(val_probs, dtype=np.float64), eps, 1 - eps)
+    val_labels = np.asarray(val_labels, dtype=np.float64)
+    val_logits = np.log(val_probs / (1 - val_probs))
+
+    def neg_ll(T):
+        p = 1.0 / (1.0 + np.exp(-val_logits / T))
+        p = np.clip(p, eps, 1 - eps)
+        return -np.mean(val_labels * np.log(p) + (1 - val_labels) * np.log(1 - p))
+
+    res = minimize_scalar(neg_ll, bounds=bounds, method="bounded",
+                          options={"xatol": 1e-4})
+    return float(res.x)
+
+
+def apply_temperature(probs, T):
+    """Apply temperature T to existing sigmoid probabilities."""
+    eps = 1e-7
+    probs = np.clip(np.asarray(probs, dtype=np.float64), eps, 1 - eps)
+    logits = np.log(probs / (1 - probs))
+    return 1.0 / (1.0 + np.exp(-logits / T))
+
+
 def expected_calibration_error(probs, labels, n_bins=10):
     """Standard ECE: weighted gap between predicted confidence and actual accuracy.
 
@@ -87,21 +118,41 @@ def main():
                    help="run dir containing test_probs.npy and test_labels.npy")
     p.add_argument("--target_sensitivity", type=float, default=0.97)
     p.add_argument("--n_bins", type=int, default=10)
+    p.add_argument("--no_temperature", action="store_true",
+                   help="Skip temperature scaling even if val_probs.npy exists.")
     args = p.parse_args()
 
     run_dir = Path(args.run)
     probs = np.load(run_dir / "test_probs.npy")
     labels = np.load(run_dir / "test_labels.npy").astype(int)
 
+    # Optional: post-hoc temperature scaling using held-out val predictions.
+    T_star = None
+    probs_uncal = probs.copy()
+    val_p_path = run_dir / "val_probs.npy"
+    val_l_path = run_dir / "val_labels.npy"
+    if not args.no_temperature and val_p_path.exists() and val_l_path.exists():
+        val_probs = np.load(val_p_path)
+        val_labels = np.load(val_l_path).astype(int)
+        T_star = fit_temperature(val_probs, val_labels)
+        probs = apply_temperature(probs, T_star)
+        print(f"Temperature scaling: fitted T* = {T_star:.4f} on "
+              f"{len(val_labels)} val samples. Applied to test.")
+    elif not args.no_temperature:
+        print(f"(No val_probs.npy in {run_dir} — skipping temperature scaling.)")
+
     print(f"Run: {run_dir}")
     print(f"Test images: {len(labels)} (PNE prevalence: {labels.mean():.3f})")
     print()
 
-    # AUROC (threshold-independent)
+    # AUROC (threshold-independent — invariant under temperature scaling)
     auroc = float(roc_auc_score(labels, probs))
 
-    # ECE
+    # ECE on calibrated probs (after temperature scaling if applied)
     ece, bin_data = expected_calibration_error(probs, labels, n_bins=args.n_bins)
+    # Also compute the uncalibrated ECE for comparison.
+    ece_uncal, _ = expected_calibration_error(probs_uncal, labels,
+                                              n_bins=args.n_bins)
 
     # Three operating points
     m_default = metrics_at(probs, labels, 0.5)
@@ -131,8 +182,14 @@ def main():
 
     print()
     print(f"AUROC                       {auroc:.4f}      (threshold-independent)")
-    print(f"ECE  ({args.n_bins} bins)              {ece:.4f}      "
-          f"({'well-calibrated' if ece < 0.05 else 'mis-calibrated' if ece > 0.10 else 'borderline'})")
+    if T_star is not None:
+        print(f"ECE  ({args.n_bins} bins) uncalibrated  {ece_uncal:.4f}")
+        print(f"ECE  ({args.n_bins} bins) calibrated    {ece:.4f}      "
+              f"({'well-calibrated' if ece < 0.05 else 'mis-calibrated' if ece > 0.10 else 'borderline'})  "
+              f"[T*={T_star:.3f}]")
+    else:
+        print(f"ECE  ({args.n_bins} bins)              {ece:.4f}      "
+              f"({'well-calibrated' if ece < 0.05 else 'mis-calibrated' if ece > 0.10 else 'borderline'})")
 
     # Binomial standard error: any accuracy delta < 2*sigma is within noise.
     import math
@@ -156,6 +213,8 @@ def main():
     out = {
         "auroc": auroc,
         "ece": ece,
+        "ece_uncalibrated": ece_uncal,
+        "temperature_T_star": T_star,
         "ece_n_bins": args.n_bins,
         "calibration_bins_uniform": bin_data,
         "operating_points": {

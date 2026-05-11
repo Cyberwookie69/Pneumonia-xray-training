@@ -151,15 +151,31 @@ class XRayDataset(Dataset):
         return self.transform(img), label
 
 
-def build_transforms(img_size: int, train: bool, augment: bool):
+def build_transforms(img_size: int, train: bool, augment: bool,
+                     policy: str = "standard"):
+    """Resize → [augment] → ToTensor → Normalise.
+
+    `policy`:
+      - "standard": flip + affine + jitter (the existing pipeline)
+      - "trivial":  TrivialAugmentWide (Müller & Hutter 2021, one-knob aug)
+    """
     base = [transforms.Resize((img_size, img_size))]
     if train and augment:
-        base += [
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomAffine(degrees=8, translate=(0.04, 0.04),
-                                    scale=(0.95, 1.05)),
-            transforms.ColorJitter(brightness=0.1, contrast=0.1),
-        ]
+        if policy == "trivial":
+            # TrivialAugmentWide assumes 3-channel input; we round-trip via
+            # a fake-RGB grayscale duplication so colour ops act as no-ops.
+            base += [
+                transforms.Grayscale(num_output_channels=3),
+                transforms.TrivialAugmentWide(),
+                transforms.Grayscale(num_output_channels=1),
+            ]
+        else:
+            base += [
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomAffine(degrees=8, translate=(0.04, 0.04),
+                                        scale=(0.95, 1.05)),
+                transforms.ColorJitter(brightness=0.1, contrast=0.1),
+            ]
     base += [
         transforms.ToTensor(),  # already 1-channel
         transforms.Normalize(mean=[0.485], std=[0.229]),
@@ -167,24 +183,114 @@ def build_transforms(img_size: int, train: bool, augment: bool):
     return transforms.Compose(base)
 
 
+class Lion(torch.optim.Optimizer):
+    """Lion optimizer (Chen et al. 2023, NeurIPS).
+
+    Sign-based update with EMA-tracked momentum. Same wall-clock per step
+    as AdamW, often matches or slightly beats it on CV tasks. Tends to
+    benefit from a 3–10× smaller learning rate.
+    """
+
+    def __init__(self, params, lr=1e-4, betas=(0.9, 0.99), weight_decay=0.0):
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay)
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = closure() if closure is not None else None
+        for group in self.param_groups:
+            lr = group["lr"]
+            b1, b2 = group["betas"]
+            wd = group["weight_decay"]
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                g = p.grad
+                if wd > 0:
+                    p.data.mul_(1 - lr * wd)
+                state = self.state[p]
+                if "exp_avg" not in state:
+                    state["exp_avg"] = torch.zeros_like(p)
+                exp_avg = state["exp_avg"]
+                update = exp_avg.mul(b1).add(g, alpha=1 - b1).sign_()
+                p.data.add_(update, alpha=-lr)
+                exp_avg.mul_(b2).add_(g, alpha=1 - b2)
+        return loss
+
+
+def cutmix_batch(x, y, alpha=1.0):
+    """Apply CutMix (Yun et al. 2019, ICCV) within a batch.
+
+    Returns the mixed input, original labels, shuffled labels, and the
+    effective mixing weight λ (= area kept of the original images).
+    """
+    lam = float(np.random.beta(alpha, alpha))
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size, device=x.device)
+    _, _, H, W = x.shape
+    cut_rat = np.sqrt(1.0 - lam)
+    cut_w = int(W * cut_rat)
+    cut_h = int(H * cut_rat)
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+    bbx1 = max(0, cx - cut_w // 2)
+    bby1 = max(0, cy - cut_h // 2)
+    bbx2 = min(W, cx + cut_w // 2)
+    bby2 = min(H, cy + cut_h // 2)
+    x[:, :, bby1:bby2, bbx1:bbx2] = x[index, :, bby1:bby2, bbx1:bbx2]
+    # Recompute lambda to match the actual cut area.
+    lam = 1.0 - ((bbx2 - bbx1) * (bby2 - bby1) / (W * H))
+    return x, y, y[index], lam
+
+
 # ---------------------------------------------------------------------------
 # Train / eval
 # ---------------------------------------------------------------------------
 
 
-def train_one_epoch(model, loader, opt, device, criterion):
+def train_one_epoch(model, loader, opt, device, criterion,
+                    label_smoothing=0.0, cutmix_alpha=0.0):
+    """One pass over the training loader.
+
+    `label_smoothing` ∈ [0, 1) softens the binary targets symmetrically:
+    y=1 → 1 − α/2, y=0 → α/2 (Müller et al. 2019, NeurIPS).
+
+    `cutmix_alpha` > 0 enables CutMix with Beta(α, α) sampling per batch,
+    applied with 50% probability. Loss becomes a λ-weighted sum of the
+    losses on the original and shuffled labels (Yun et al. 2019, ICCV).
+
+    Both default to 0 = original behaviour preserved.
+    """
     model.train()
     total_loss, total_correct, n = 0.0, 0, 0
     for x, y in loader:
         x = x.to(device)
         y = y.to(device).float()
         opt.zero_grad()
-        logits = model(x)
-        loss = criterion(logits, y)
+        use_cutmix = cutmix_alpha > 0 and np.random.random() < 0.5
+        if use_cutmix:
+            x, y_a, y_b, lam = cutmix_batch(x, y, alpha=cutmix_alpha)
+            logits = model(x)
+            if label_smoothing > 0:
+                y_a_t = y_a * (1.0 - label_smoothing) + 0.5 * label_smoothing
+                y_b_t = y_b * (1.0 - label_smoothing) + 0.5 * label_smoothing
+            else:
+                y_a_t, y_b_t = y_a, y_b
+            loss = lam * criterion(logits, y_a_t) + (1 - lam) * criterion(logits, y_b_t)
+            # Accuracy against the dominant target (the one with higher λ).
+            y_for_acc = y_a if lam >= 0.5 else y_b
+            total_correct += ((logits > 0).long() == y_for_acc.long()).sum().item()
+        else:
+            logits = model(x)
+            if label_smoothing > 0:
+                y_target = y * (1.0 - label_smoothing) + 0.5 * label_smoothing
+            else:
+                y_target = y
+            loss = criterion(logits, y_target)
+            total_correct += ((logits > 0).long() == y.long()).sum().item()
         loss.backward()
         opt.step()
         total_loss += loss.item() * x.size(0)
-        total_correct += ((logits > 0).long() == y.long()).sum().item()
         n += x.size(0)
     return total_loss / n, total_correct / n
 
@@ -232,8 +338,28 @@ def parse_args():
                    help="dropout p before final linear (0 = off)")
     p.add_argument("--weight_decay", type=float, default=0.0,
                    help="L2 penalty (0 = off)")
+    p.add_argument("--label_smoothing", type=float, default=0.0,
+                   help="Symmetric binary label smoothing α ∈ [0, 1). Targets "
+                        "are softened: y=1→1−α/2, y=0→α/2. Default 0 = no "
+                        "smoothing (Müller et al. 2019, NeurIPS).")
     p.add_argument("--augment", action="store_true",
                    help="enable training-time augmentation (flip+affine+jitter)")
+    p.add_argument("--augment_policy", choices=["standard", "trivial"],
+                   default="standard",
+                   help="Augmentation pipeline. 'standard' = flip+affine+jitter. "
+                        "'trivial' = TrivialAugmentWide (Müller & Hutter 2021).")
+    p.add_argument("--cutmix_alpha", type=float, default=0.0,
+                   help="CutMix β-distribution α. 0 = off. Yun et al. 2019.")
+    p.add_argument("--optimizer", choices=["adamw", "lion"], default="adamw",
+                   help="Choice of optimizer. 'lion' = Chen et al. 2023 (NeurIPS).")
+    p.add_argument("--use_swa", action="store_true",
+                   help="Enable Stochastic Weight Averaging over the last "
+                        "(1 - swa_start_frac) fraction of epochs. Replaces "
+                        "best_state with the SWA average and reruns BN stats. "
+                        "Izmailov et al. 2018.")
+    p.add_argument("--swa_start_frac", type=float, default=0.75,
+                   help="Fraction of total epochs after which SWA averaging "
+                        "kicks in (default 0.75 = last 25%% of training).")
     p.add_argument("--early_stop_patience", type=int, default=0,
                    help="stop if val loss doesn't improve for N epochs (0 = off)")
     # Training
@@ -295,7 +421,8 @@ def main():
     sampler = WeightedRandomSampler(sampler_weights, num_samples=len(fold_train),
                                     replacement=True)
 
-    train_tf = build_transforms(args.img_size, train=True, augment=args.augment)
+    train_tf = build_transforms(args.img_size, train=True, augment=args.augment,
+                                policy=args.augment_policy)
     eval_tf = build_transforms(args.img_size, train=False, augment=False)
 
     dl_train = DataLoader(XRayDataset(fold_train, train_tf),
@@ -320,9 +447,22 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {n_params:,}")
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
-                            weight_decay=args.weight_decay)
+    if args.optimizer == "lion":
+        # Lion typically wants a smaller LR than AdamW; user controls via --lr.
+        opt = Lion(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    else:
+        opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
+                                weight_decay=args.weight_decay)
     criterion = nn.BCEWithLogitsLoss()
+
+    # SWA setup — runs alongside normal training and replaces best_state at end.
+    swa_model = None
+    swa_start_epoch = 0
+    if args.use_swa:
+        from torch.optim.swa_utils import AveragedModel
+        swa_model = AveragedModel(model)
+        swa_start_epoch = max(0, int(args.epochs * args.swa_start_frac))
+        print(f"SWA: averaging from epoch {swa_start_epoch + 1} onwards.")
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     best_val_loss = float("inf")
@@ -332,7 +472,9 @@ def main():
 
     t0 = time.time()
     for epoch in range(args.epochs):
-        tr_loss, tr_acc = train_one_epoch(model, dl_train, opt, device, criterion)
+        tr_loss, tr_acc = train_one_epoch(model, dl_train, opt, device, criterion,
+                                          label_smoothing=args.label_smoothing,
+                                          cutmix_alpha=args.cutmix_alpha)
         va_loss, va_acc, _, _ = evaluate(model, dl_val, device, criterion)
         history["train_loss"].append(tr_loss)
         history["train_acc"].append(tr_acc)
@@ -340,6 +482,10 @@ def main():
         history["val_acc"].append(va_acc)
         print(f"  ep{epoch + 1:>2}  train {tr_loss:.4f}/{tr_acc:.4f}  "
               f"val {va_loss:.4f}/{va_acc:.4f}")
+
+        # SWA: accumulate weight average from swa_start_epoch onwards.
+        if swa_model is not None and epoch >= swa_start_epoch:
+            swa_model.update_parameters(model)
 
         # Track best by val_loss (avoids picking a noisy spike in val_acc).
         if va_loss < best_val_loss:
@@ -350,13 +496,34 @@ def main():
             no_improve = 0
         else:
             no_improve += 1
-            if args.early_stop_patience and no_improve >= args.early_stop_patience:
+            # When SWA is on we want the full schedule; skip early stopping.
+            if (not args.use_swa and args.early_stop_patience
+                    and no_improve >= args.early_stop_patience):
                 print(f"  early-stop at epoch {epoch + 1} (no val improvement "
                       f"in {args.early_stop_patience} epochs)")
                 break
 
+    # SWA: replace best_state with the averaged weights and re-fit BN stats.
+    if swa_model is not None:
+        from torch.optim.swa_utils import update_bn
+        print("SWA: updating BatchNorm stats on the averaged model...")
+        update_bn(dl_train, swa_model, device=device)
+        # Extract the underlying module's state dict (strip 'module.' prefix).
+        swa_state = swa_model.module.state_dict()
+        best_state = {k: v.detach().cpu().clone() for k, v in swa_state.items()}
+        # Re-evaluate to log the SWA val_loss/val_acc.
+        model.load_state_dict(best_state)
+        swa_val_loss, swa_val_acc, _, _ = evaluate(model, dl_val, device, criterion)
+        print(f"SWA result: val_loss={swa_val_loss:.4f}  val_acc={swa_val_acc:.4f}")
+        best_val_loss = swa_val_loss
+        best_val_acc = swa_val_acc
+
     if best_state is not None:
         model.load_state_dict(best_state)
+
+    # Val predictions from the chosen model — needed for post-hoc calibration
+    # (temperature scaling) in _helpers/medical_kpis.py.
+    _, _, val_probs, val_labels_arr = evaluate(model, dl_val, device, criterion)
 
     # Final test eval, touched once.
     test_loss, test_acc, test_probs, test_labels = evaluate(
@@ -367,6 +534,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(out_dir / "test_probs.npy", test_probs)
     np.save(out_dir / "test_labels.npy", test_labels)
+    np.save(out_dir / "val_probs.npy", val_probs)
+    np.save(out_dir / "val_labels.npy", val_labels_arr)
     if best_state is not None:
         torch.save(best_state, out_dir / "best_state.pt")
 
@@ -381,11 +550,17 @@ def main():
         },
         "regularization": {
             "weight_decay": args.weight_decay, "augment": args.augment,
+            "augment_policy": args.augment_policy,
+            "label_smoothing": args.label_smoothing,
+            "cutmix_alpha": args.cutmix_alpha,
             "early_stop_patience": args.early_stop_patience,
         },
         "training": {
             "img_size": args.img_size, "batch_size": args.batch_size,
             "epochs": args.epochs, "lr": args.lr, "seed": args.seed,
+            "optimizer": args.optimizer,
+            "use_swa": args.use_swa,
+            "swa_start_frac": args.swa_start_frac if args.use_swa else None,
             "n_folds": args.n_folds, "fold": args.fold,
             "elapsed_min": (time.time() - t0) / 60,
         },
