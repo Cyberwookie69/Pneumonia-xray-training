@@ -15,6 +15,27 @@ authoritative anchor.
 
 ---
 
+## [1.1.0] — 2026-05-11
+**Visual report dashboard (§26) + Grad-CAM defaults to A3-winner.**
+New §26 "Visual report dashboard" contains four chart cells driven entirely
+by cached `test_probs.npy` / `test_labels.npy` / `medical_kpis.json`:
+- Scorecard per approach (4 KPIs vs clinical-zone bands, ±1.96σ error bars,
+  PASS/HIGH/FAIL status icons)
+- ROC overlay zoomed to the top-left clinical region with sweet-zone box
+- Confusion-matrix heatmap grid at val-tuned thresholds
+- Reliability diagrams (per-bin bars, opacity = bin share)
+
+Each cell degrades gracefully — approaches without `medical_kpis.json`
+present are skipped. §26 Conclusion and §27 Future work renumbered to §27
+and §28 respectively. 78 cells (was 73).
+
+§13 Grad-CAM now loads `a3_combo`'s checkpoint by default (the A3 winner),
+restoring the compact "classic" attention pattern. The stacked champion
+produces a more diffuse heatmap because SWA averages weights and CutMix
+trains the model to attend to local patches — interesting but distinct.
+Switch the `GRADCAM_RUN` variable to `'champion_f0'` to see the stacked
+attention.
+
 ## [1.0.1] — 2026-05-11
 **Drop duplicate §14 Mixup demo cell + renumber §15–§28 → §14–§27.**
 Old §14 was a verbatim duplicate of §23 (same image, near-identical
@@ -139,7 +160,8 @@ evaluate. Birth of the notebook.
 
 | Version | Date | Commit | One-line |
 |---|---|---|---|
-| 1.0.1 | 2026-05-11 | _this commit_ | Drop duplicate §14, renumber §15–§28 |
+| 1.1.0 | 2026-05-11 | _this commit_ | Visual report dashboard §26 + Grad-CAM A3 default |
+| 1.0.1 | 2026-05-11 | `e2b78e5` | Drop duplicate §14, renumber §15–§28 |
 | 1.0.0 | 2026-05-11 | `35430f1` | Version stamp introduced |
 | 0.13.0 | 2026-05-11 | `b804531` | A4 sweep + Future Work |
 | 0.12.1 | 2026-05-11 | `457d263` | Claude → Gemini |
