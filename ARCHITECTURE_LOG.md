@@ -601,3 +601,24 @@ produce material directly usable in the report.
 | One full fold (15 ep, ResNet50, mixup+EMA) | ~45 min |
 | Five-fold ensemble run estimate | ~3.5-4 hours |
 
+---
+
+## 2026-05-11
+
+### 11:00 — Self-training variant sweep documented in `SELF_TRAINING_VARIANTS.md`
+- New top-level document `SELF_TRAINING_VARIANTS.md` consolidates the seven
+  local Vega 64 runs (`local_baseline`, `local_a3combo`, `local_a3_smooth`,
+  `local_a3_swa`, `local_a3_trivial`, `local_a3_cutmix`, `local_a3_champion`)
+  into a single per-variant table plus per-technique explanations.
+- Headline finding: stacking label-smoothing + CutMix + SWA on the A3 platform
+  lifts test acc 0.806 → 0.888 and specificity 0.500 → 0.726 — the three
+  variants attack independent failure modes (saturation, global-feature
+  reliance, optimiser noise) so the gains are additive.
+- Negative result preserved: TrivialAugmentWide regresses by 0.8 pp because
+  posterize/solarize/equalize destroy the very mid-grey ground-glass texture
+  used to distinguish PNE from NORMAL — domain-agnostic augmentation policies
+  underperform a small, hand-curated affine + flip set on chest X-rays.
+- Stacking config validated by this sweep is what the Colab notebook will
+  use for the 5-fold champion ensemble: `--label_smoothing 0.05
+  --cutmix_alpha 1.0 --use_swa --swa_start_frac 0.75`.
+

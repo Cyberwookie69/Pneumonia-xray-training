@@ -536,3 +536,65 @@ the label-noise ceiling.
   *(Survey of FDA/CE-cleared radiology AI; supports the use-case
   taxonomy and the empirical observation that stand-alone pneumonia
   diagnostics are not currently approved.)*
+
+---
+
+## Future work
+
+Three directions, in increasing order of ambition. The first is wired
+and one Colab session away; the third is a multi-month research
+programme.
+
+### 1. Five-fold cross-validation + transfer-learning baselines (≈ 1 day)
+
+A self-contained Colab notebook (`pneumonia_colab.ipynb`) is already
+built that, in a single Run-All, executes: the A1/A2/A3 ablations, the
+A4 variant-stacking sweep, a 5-fold CV ensemble of the stacked-champion
+config (label smoothing + CutMix + SWA on top of the A3 winner), and
+three transfer-learning baselines (ResNet50 + ImageNet, BiomedCLIP, and
+RAD-DINO). This puts a 95 % CI around the headline single-fold
+specificity figure (currently 0.726 ± 3.2 pp at the noise floor), and
+quantifies the from-scratch gap against domain-pretrained backbones —
+the two questions the report cannot answer on local Vega 64 data alone.
+Estimated cost: ~3-4 GPU-hours on H100, well within Colab Pro's monthly
+allowance.
+
+### 2. Autoresearch over the regularisation / augmentation space
+
+Our manual A4 sweep covers five training-time techniques (label
+smoothing, SWA, TrivialAugment, CutMix, Lion). The remaining variant
+space catalogued in §3 of `SELF_TRAINING_VARIANTS.md` — Mixup α,
+Manifold Mixup layer, RandAugment (n, m), focal loss γ, scheduler
+choice, EMA decay, kernel size, channel multiplier — plus the
+*interactions* between these knobs (e.g., label_smoothing × CutMix-α ×
+SWA-start) spans roughly 10-15 dimensions. Combinatorially this is
+~10³ configurations, infeasible by hand. An autonomous loop in the
+spirit of Karpathy's *autoresearch* concept, or directly using the
+medical-imaging fork `mattlungrenmd/autoresearch-medimage`, would
+fit cleanly because `pneumonia_cnn_custom.py` is already flag-driven
+and emits a fixed result schema (`summary.json` + `medical_kpis.json`
++ `test_probs.npy`). The driver script would propose a config, run
+training, read validation NLL, and decide what to try next — with a
+single held-out test-set evaluation reserved for the final winning
+config, to prevent the test-tuning failure mode observed in three of
+four 99 %+ Kaggle notebooks audited for this report. Honest
+limitation: this does not address the prior-shift bottleneck that
+keeps specificity below 0.90 — that requires additional NORMAL data,
+not better hyperparameters.
+
+### 3. NAS-style architecture search + external validation
+
+The most ambitious extension folds the architectural axes (`n_blocks`,
+channel multiplier, kernel size, activation, padding, stride mode)
+into the same autonomous loop, effectively a lightweight Neural
+Architecture Search. NAS results on closely-related chest-X-ray
+benchmarks have reached AUC > 0.97 (e.g., on CheXpert and NIH
+ChestX-ray14). Paired with this, external validation on RSNA Pneumonia
+Detection Challenge data, NIH ChestX-ray14, or PadChest would
+quantify how much of our current performance is dataset-specific
+versus genuinely generalisable — the question that label-noise and
+prior-shift analysis can only hint at from a single source. Together
+these two pieces close the gap between an academic ablation study
+and the multi-centre validation pipeline expected for FDA/CE
+submission, and they motivate the regulatory and bias risks already
+catalogued in Appendix B.
