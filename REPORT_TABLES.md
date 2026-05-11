@@ -449,3 +449,90 @@ not better threshold tuning.
    The realistic optimum on our setup is sens ≥ 0.97 with maximum
    specificity → **sens 0.972 / spec 0.893** — a clinically defensible
    operating point that lies near the theoretical ceiling.
+
+### Supporting references (Appendix A)
+
+- Kermany, D. S. *et al.* (2018). *Identifying medical diagnoses and
+  treatable diseases by image-based deep learning.* **Cell**, 172(5),
+  1122–1131. *(Source of the dataset; labelling protocol with dual-
+  physician test annotation; basis for the 5–10 % label-noise estimate.)*
+- Rajpurkar, P. *et al.* (2017). *CheXNet: Radiologist-Level Pneumonia
+  Detection on Chest X-Rays with Deep Learning.* arXiv:1711.05225.
+  *(Radiologist baseline and inter-rater agreement on chest X-ray
+  pneumonia tasks; supports the Bayes-error ceiling discussion.)*
+
+---
+
+## Appendix B — Clinical usability thresholds
+
+### Summary
+
+A chest X-ray classifier is clinically usable only when sensitivity ≥ 95 %
+**and** specificity ≥ 90 % are reached simultaneously; below either, the
+tool becomes a missed-diagnosis liability or a workflow burden through
+excess false alarms.
+
+### Use-case-specific minima
+
+| Use-case | Min sensitivity | Min specificity | Rationale |
+|----------|---------------:|---------------:|-----------|
+| Primary screening | ≥ 98 % | ≥ 80 % | Catch-all role; false alarms triaged to imaging |
+| Triage assistant | ≥ 95 % | ≥ 90 % | Speed + accuracy both needed |
+| Decision support (radiologist-assistant) | ≥ 95 % | ≥ 95 % | Second-opinion role, not replacement |
+| Stand-alone diagnostics | ≥ 98 % | ≥ 97 % | Without clinician in the loop — currently no FDA-cleared tool meets this for pneumonia |
+
+### Why specificity dominates in low-prevalence deployment
+
+The Kaggle test set has a 62.5 % pneumonia prevalence — much higher than
+real screening populations. At deployment, prevalence drops and the
+positive predictive value (PPV) becomes prevalence-sensitive:
+
+| Prevalence | sens 97 %, spec 88 % → PPV | sens 99.7 %, spec 25 % → PPV |
+|-----------:|---------------------------:|-----------------------------:|
+| 62.5 % (our test) | 93 % (acceptable) | 69 % (questionable) |
+| 30 % (hospital admission) | 77 % (marginal) | 36 % (poor) |
+| 5 % (primary care) | 30 % (unusable) | **6.6 %** (worthless) |
+
+→ For primary care (5 % prevalence) the specificity floor is **≥ 95 %**
+to keep PPV > 50 % — at the upper limit of what is reachable on this
+dataset.
+
+### How to push our ensemble toward full clinical usability
+
+Our archived ensemble sits at sens 97.7 % / spec 88.0 %. Threshold
+tuning alone (τ = 0.545) yields sens 96.9 % / spec 91.0 % — already at
+the triage-assistant minimum (≥ 95 % / ≥ 90 %). The remaining gap to
+decision-support level is on specificity, requiring ~4-5 pp more while
+holding sens ≥ 95 %. Realistic interventions:
+
+| Improvement | Expected Δ spec @ sens ≥ 95 % | Effort | Cost |
+|-------------|----------------------------:|--------|------|
+| Higher input resolution (288 → 320) | +1-2 pp | one CLI flag | ~2× compute |
+| Multi-arch ensemble (custom CNN + ResNet50 + BiomedCLIP + RAD-DINO) | +1-3 pp | already wired | ~50 min H100 |
+| Temperature scaling on validation NLL | +0.5-1 pp | ~30 lines | negligible |
+| Hard-negative mining on confidently-wrong normals | +1-2 pp | ~1 hour | +1 training cycle |
+| Label-noise audit on top-confidence wrong predictions | +0.5-1 pp | manual review | ~1 hour |
+| Multi-seed ensemble (3 × 5-fold) | +0.1-0.5 pp | flag change | 3× compute |
+
+Stacked, these realistically reach **sens 96-97 % / spec 93-95 %** — the
+theoretical ceiling described in Appendix A, sufficient for clinical
+decision support. Stand-alone diagnostics (≥ 98 % / ≥ 97 %) remain
+unreachable on this dataset because the required AUROC ≥ 0.99 exceeds
+the label-noise ceiling.
+
+### Supporting references (Appendix B)
+
+- Rajpurkar, P. *et al.* (2017). *CheXNet: Radiologist-Level Pneumonia
+  Detection on Chest X-Rays with Deep Learning.* arXiv:1711.05225.
+  *(Defines the radiologist-level performance bar; informs the
+  decision-support and stand-alone thresholds.)*
+- Pepe, M. S. (2003). *The Statistical Evaluation of Medical Tests for
+  Classification and Prediction.* Oxford University Press.
+  *(Standard reference for prevalence-aware PPV/NPV analysis and the
+  prevalence-sensitivity trade-off applied to the deployment table.)*
+- van Leeuwen, K. G. *et al.* (2021). *Artificial intelligence in
+  radiology: 100 commercially available products and their scientific
+  evidence.* **European Radiology**, 31(6), 3797–3804.
+  *(Survey of FDA/CE-cleared radiology AI; supports the use-case
+  taxonomy and the empirical observation that stand-alone pneumonia
+  diagnostics are not currently approved.)*
