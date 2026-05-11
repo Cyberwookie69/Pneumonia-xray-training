@@ -32,12 +32,13 @@ def metrics_at(probs, labels, threshold):
             "specificity": spec, "tp": tp, "tn": tn, "fp": fp, "fn": fn}
 
 
-def fit_temperature(val_probs, val_labels, bounds=(0.5, 20.0)):
+def fit_temperature(val_probs, val_labels, bounds=(0.05, 20.0)):
     """Fit a single scalar T on validation by minimising binary NLL.
 
     Standard Platt-style post-hoc calibration. Returns the optimal T.
     T == 1 means no rescaling. T > 1 softens overconfident predictions;
-    T < 1 sharpens under-confident ones.
+    T < 1 sharpens under-confident ones (e.g., after label smoothing).
+    Lower bound 0.05 lets the fit handle deliberately-softened outputs.
     """
     from scipy.optimize import minimize_scalar
     eps = 1e-7
