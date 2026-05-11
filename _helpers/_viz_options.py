@@ -8,7 +8,7 @@ import numpy as np
 
 OUT_DIR = Path(__file__).resolve().parent
 
-APPROACHES = ['Custom CNN', 'ResNet50+IN', 'BiomedCLIP', 'RAD-DINO']
+APPROACHES = ['Custom CNN', 'ResNet50+IN', 'BiomedCLIP', 'RAD-DINO', 'cnn-kamal']
 METRICS = ['Sensitivity', 'Specificity', 'AUROC', '1 − ECE']
 THR_MIN = {'Sensitivity': 0.95, 'Specificity': 0.90, 'AUROC': 0.95, '1 − ECE': 0.90}
 THR_MAX = {'Sensitivity': 0.97, 'Specificity': 0.95, 'AUROC': 0.98, '1 − ECE': 0.95}
@@ -18,6 +18,10 @@ VALUES = {
     'ResNet50+IN': [0.97, 0.88, 0.98, 0.84],
     'BiomedCLIP':  [0.94, 0.91, 0.96, 0.88],
     'RAD-DINO':    [0.96, 0.93, 0.97, 0.90],
+    # Peer reference (anonymous): high sens via threshold tuning at the cost
+    # of specificity, AUROC, and calibration. Included as an instructive
+    # example of an "unusable" classifier despite impressive sensitivity.
+    'cnn-kamal':   [0.997, 0.252, 0.924, 0.75],
 }
 
 # Semantic zone colours
@@ -66,7 +70,7 @@ def option3():
             y = y_offsets[i]
             ax.scatter(v, y, s=220, color=c, zorder=3,
                        edgecolor='black', linewidth=0.8)
-            ax.text(v + 0.003, y, f' {app}: {v:.2f}',
+            ax.text(v + 0.003, y, f' {app}: {v:.3f}',
                     va='center', fontsize=8.5, fontweight='bold', color=c)
         # Threshold labels at bottom
         ax.text(THR_MIN[m], -1.0, f'min {THR_MIN[m]}', ha='center',
@@ -75,7 +79,7 @@ def option3():
                 fontsize=7, color=COLOR_SUS)
         ax.set_ylabel(m, fontsize=10, rotation=0, ha='right', va='center')
         ax.set_yticks([]); ax.set_ylim(-1.2, 1.0)
-        ax.set_xlim(0.78, 1.0)
+        ax.set_xlim(0.20, 1.0)
     axes[-1].set_xlabel('Score')
     axes[0].set_title('Option 3 — Stacked bullet charts with semantic zone colouring\n'
                       '(dot colour = zone status, label = approach)',
@@ -92,6 +96,9 @@ def option3():
 
 # ─── Option 5 (revised): semantic sens × spec scatter ───────────────────────
 def option5():
+    # Skip cnn-kamal here — its spec=0.25 falls off the 0.78–1.0 axis we use
+    # for the sweet-spot scatter. It's already shown in the bullet chart.
+    scatter_approaches = [a for a in APPROACHES if a != 'cnn-kamal']
     fig, ax = plt.subplots(figsize=(8.5, 8))
     # Background quadrant zones
     # Below either minimum = red
@@ -116,7 +123,7 @@ def option5():
     ax.axvline(THR_MAX['Specificity'], color=COLOR_SUS, linestyle='--', linewidth=1.2)
     ax.axhline(THR_MAX['Sensitivity'], color=COLOR_SUS, linestyle='--', linewidth=1.2)
     # Approach dots — colour = worst-zone-of-the-two
-    for app in APPROACHES:
+    for app in scatter_approaches:
         sens = VALUES[app][0]; spec = VALUES[app][1]
         zone_s = zone_of('Sensitivity', sens)
         zone_p = zone_of('Specificity', spec)
