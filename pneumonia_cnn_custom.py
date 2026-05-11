@@ -218,6 +218,24 @@ class Lion(torch.optim.Optimizer):
         return loss
 
 
+class DMLFriendlyBCE(nn.Module):
+    """BCE-with-logits that avoids the aten::log_sigmoid_forward fallback
+    on DirectML. Mathematically equivalent to nn.BCEWithLogitsLoss but
+    written with ops that stay on the DML backend (clamp, mul, sub, abs,
+    exp, log1p), so it doesn't trigger the per-step CPU round-trip.
+
+    Identity used:
+        BCE(x, y) = max(x, 0) - x*y + log1p(exp(-|x|))
+    Numerically stable for any x; identical gradient to BCEWithLogitsLoss
+    up to floating-point noise.
+    """
+
+    def forward(self, logits, target):
+        pos = torch.clamp(logits, min=0.0)
+        return (pos - logits * target
+                + torch.log1p(torch.exp(-torch.abs(logits)))).mean()
+
+
 def cutmix_batch(x, y, alpha=1.0):
     """Apply CutMix (Yun et al. 2019, ICCV) within a batch.
 
@@ -453,7 +471,17 @@ def main():
     else:
         opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                                 weight_decay=args.weight_decay)
-    criterion = nn.BCEWithLogitsLoss()
+
+    # On DirectML (Vega/AMD), nn.BCEWithLogitsLoss triggers a CPU fallback
+    # for aten::log_sigmoid_forward — each step round-trips through CPU and
+    # turns training effectively CPU-bound. The manual DMLFriendlyBCE uses
+    # the same formula with ops that stay on DML.
+    is_dml = "privateuseone" in str(device).lower() or "dml" in device_name.lower()
+    if is_dml:
+        criterion = DMLFriendlyBCE()
+        print("Loss: DMLFriendlyBCE (avoids log_sigmoid CPU fallback on DirectML)")
+    else:
+        criterion = nn.BCEWithLogitsLoss()
 
     # SWA setup — runs alongside normal training and replaces best_state at end.
     swa_model = None
