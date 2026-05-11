@@ -15,6 +15,15 @@ authoritative anchor.
 
 ---
 
+## [1.1.1] — 2026-05-11
+**Graceful failure for Gemini API quota/overload errors.** All three Gemini
+cells (Nano Banana image generation, chart-critique vision, conclusion-draft
+text) now wrap `generate_content` in try/except and print a friendly message
+on 429 (free-tier quota exhausted) or 503 (model overloaded) instead of
+crashing the cell with a raw traceback. Nano Banana markdown updated to
+warn that `gemini-2.5-flash-image` is unavailable on the free tier
+(quota limit: 0) — use the static fallback in the next cell.
+
 ## [1.1.0] — 2026-05-11
 **Visual report dashboard (§26) + Grad-CAM defaults to A3-winner.**
 New §26 "Visual report dashboard" contains four chart cells driven entirely
@@ -160,7 +169,8 @@ evaluate. Birth of the notebook.
 
 | Version | Date | Commit | One-line |
 |---|---|---|---|
-| 1.1.0 | 2026-05-11 | _this commit_ | Visual report dashboard §26 + Grad-CAM A3 default |
+| 1.1.1 | 2026-05-11 | _this commit_ | Graceful 429/503 handling on all Gemini cells |
+| 1.1.0 | 2026-05-11 | `e924dd0` | Visual report dashboard §26 + Grad-CAM A3 default |
 | 1.0.1 | 2026-05-11 | `e2b78e5` | Drop duplicate §14, renumber §15–§28 |
 | 1.0.0 | 2026-05-11 | `35430f1` | Version stamp introduced |
 | 0.13.0 | 2026-05-11 | `b804531` | A4 sweep + Future Work |
