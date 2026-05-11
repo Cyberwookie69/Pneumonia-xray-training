@@ -15,6 +15,15 @@ authoritative anchor.
 
 ---
 
+## [1.0.1] — 2026-05-11
+**Drop duplicate §14 Mixup demo cell + renumber §15–§28 → §14–§27.**
+Old §14 was a verbatim duplicate of §23 (same image, near-identical
+text). Removed §14, moved its `IPython.display` imports into the
+surviving demo cell (now §22), and shifted all subsequent section
+numbers down by 1. Notebook now 73 cells (was 75). Updated all
+internal cross-references (HF token notice in §3, §16 in BiomedCLIP
+note, §15–§16 in caveats footer).
+
 ## [1.0.0] — 2026-05-11 · `35430f1`
 **Versioning system introduced.** First explicit `NOTEBOOK_VERSION`
 constant. Title cell and clone-cell both display `v1.0.0 · 2026-05-11`.
@@ -130,6 +139,7 @@ evaluate. Birth of the notebook.
 
 | Version | Date | Commit | One-line |
 |---|---|---|---|
+| 1.0.1 | 2026-05-11 | _this commit_ | Drop duplicate §14, renumber §15–§28 |
 | 1.0.0 | 2026-05-11 | `35430f1` | Version stamp introduced |
 | 0.13.0 | 2026-05-11 | `b804531` | A4 sweep + Future Work |
 | 0.12.1 | 2026-05-11 | `457d263` | Claude → Gemini |
