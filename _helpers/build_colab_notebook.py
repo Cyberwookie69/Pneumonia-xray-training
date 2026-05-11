@@ -1156,7 +1156,11 @@ CELLS = [
         "deep architectural ablation (A1/A2/A3). The pretrained tracks are fixed black-box "
         "feature extractors or fine-tuned with shallow hyperparameter tuning only — their "
         "architecture is not ours to design. This asymmetry is intentional and reflected "
-        "in §16-§17 cell descriptions and the methodology flow diagram (Stage 3)."
+        "in §16-§17 cell descriptions and the methodology flow diagram (Stage 3).\n"
+        "\n"
+        "**On the Kaggle Chest X-Ray Pneumonia (Kermany 2018) dataset, the realistically "
+        "achievable ceiling is around sensitivity 96-97 % and specificity 92-95 % — see "
+        "Appendix A in REPORT_TABLES.md.**"
     ),
     md(
         "### Optional — Claude-drafted alternative conclusion paragraph\n"

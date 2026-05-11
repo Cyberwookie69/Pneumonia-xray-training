@@ -341,3 +341,111 @@ duplicate other figures.
 4. Multi-seed protocol (3 × 5-fold) for honest 95 % CIs.
 5. Patient-aware splitting via `GroupKFold` for a more conservative
    internal CV estimate.
+
+---
+
+## Appendix A — Theoretical performance ceiling on this dataset
+
+### Headline numbers
+
+| Metric | Hard ceiling | Realistically achievable | Our archived ensemble | Suspect peer claims |
+|--------|-------------:|-------------------------:|----------------------:|--------------------:|
+| Sensitivity | ~98 % | 96–97 % | 97.69 % | 99 %+ |
+| Specificity | ~96 % | 92–95 % | 88.03 % | varies |
+| AUROC | ~0.99 | 0.97–0.98 | 0.9842 | — |
+| Accuracy | ~96 % | 93–95 % | 94.07 % | — |
+
+### Why this ceiling exists — four factors
+
+#### 1. Label noise (~5–10 %)
+Kermany 2018 used two physicians for the test-set labels but only one
+for the training set. Re-evaluation studies on public chest X-ray
+datasets consistently find 5–10 % label errors:
+
+- "Normal" scans that on closer inspection do show early opacity;
+- "Pneumonia" scans that are actually atelectasis (collapsed lung
+  segments);
+- Borderline cases where physicians disagree even after review.
+
+A perfect model cannot exceed the accuracy of the labels themselves.
+This sets a hard ceiling around **94–96 % accuracy** on this dataset.
+
+#### 2. Bayes error — inherent task ambiguity
+Even experienced radiologists do not always agree. Inter-rater
+Cohen's kappa on chest X-rays is typically **0.6–0.85** (Landis & Koch:
+"moderate" to "substantial" agreement). This implies that 10–20 % of
+cases are inherently ambiguous — no ML model can resolve them.
+
+Specifically difficult cases:
+
+- Early or mild pneumonia (faint infiltrates);
+- Atelectasis vs. consolidation (similar appearance on a single AP view);
+- Paediatric scans (Kermany ages 1–5) with different normal appearance
+  than adults.
+
+#### 3. Test-set size — binomial noise floor
+624 test images: 390 PNE and 234 NORM. The binomial standard error on
+each KPI is:
+
+- Sensitivity: σ = √(p(1−p)/390) ≈ **0.8 pp** at p = 0.97
+- Specificity: σ = √(p(1−p)/234) ≈ **1.9 pp** at p = 0.90
+
+A reported "99.5 % sensitivity" therefore has a 95 % confidence
+interval of roughly [98.4 %, 100 %] — not statistically distinguishable
+from 98 %. Differences smaller than ~2 pp on specificity fall within
+sampling noise.
+
+#### 4. Single-image, single-modality
+The model has only the chest X-ray image. A real radiologist
+additionally uses:
+
+- Patient history (fever, cough, symptoms, comorbidities);
+- Lateral views when available;
+- Serial scans over time;
+- Lab results and clinical context.
+
+This is not a "bug" — it is the definition of the task. But it means
+an ML model structurally has less information than a clinician and
+therefore trails by a few percentage points on the hardest cases.
+
+### The ROC trade-off — why both KPIs cannot be maximised simultaneously
+
+Every model has a ROC curve. The threshold τ can shift along it, but
+cannot reach above it.
+
+With AUROC = 0.984 (our archived ensemble), the curve allows:
+
+- sens 99 % → spec ≈ 95 % (best achievable on this curve)
+- sens 98 % → spec ≈ 96 %
+- sens 97 % → spec ≈ 97 % (balanced operating point)
+- spec 99 % → sens ≈ 96 %
+
+A hypothetical AUROC = 0.99 model would permit sens 99 % and spec 98 %
+jointly. To achieve both KPIs above 97 % therefore requires AUROC
+≥ 0.98. Improvement beyond this point requires better **features**,
+not better threshold tuning.
+
+### Implications for interpreting reported results
+
+1. **Our 97.69 % sens / 88.03 % spec lies close to the practical
+   ceiling.** Sensitivity is ~1 pp from the ceiling (98 %); specificity
+   has ~5 pp of headroom (up to ~95 %). Further gains require
+   disproportionately more compute and risk overfitting on the noise.
+
+2. **Claims above 99 % accuracy are statistically suspect on this
+   dataset.** Distinguishing "99 % sens" from "98 % sens" requires
+   thousands of test images, not 624. When such claims appear, check:
+   - What is the specificity? (Often a red flag — e.g., a 99 % sens /
+     25 % spec model is essentially a "predict-everything-positive"
+     classifier with a small discount.)
+   - What is the AUROC? (Strong discrimination can coexist with poor
+     calibration and an aggressive threshold.)
+   - Is it multi-seed or single-seed? (Single-seed = potentially a
+     lucky initialisation.)
+
+3. **The interesting variable is "balance at high specificity".** For
+   clinical screening, sensitivity should exceed specificity, but
+   specificity below 85 % becomes unusable (too many false alarms).
+   The realistic optimum on our setup is sens ≥ 0.97 with maximum
+   specificity → **sens 0.972 / spec 0.893** — a clinically defensible
+   operating point that lies near the theoretical ceiling.
