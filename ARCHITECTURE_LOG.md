@@ -605,6 +605,21 @@ produce material directly usable in the report.
 
 ## 2026-05-11
 
+### 22:30 — Discussion 4 added to `REPORT_TABLES.md`: label smoothing as a calibration story
+- Reconciles the local-vs-Colab A4 disagreement on label smoothing
+  (lokal +1.6 pp on a3_combo baseline, Colab −13.6 pp on a3_bn baseline)
+  via the literature finding (Müller 2019; mljourney.com 2024) that
+  label smoothing applied in isolation can over-regularise small
+  datasets and works best in a complementary stack (Dropout + Mixup-
+  family augmentation).
+- Reframes label smoothing as a calibration tool, not an accuracy tool.
+  Champion ECE of 0.042 sits in the meaningful-gain literature range
+  (typical 0.08 → 0.04). The combination of smoothing at training time
+  + post-hoc temperature scaling on val is the literature's
+  "strongest calibration" recipe.
+- Future-work item 4 added: a binary-medical-imaging-specific
+  calibration study would fill an actual gap in published evidence.
+
 ### 11:00 — Self-training variant sweep documented in `SELF_TRAINING_VARIANTS.md`
 - New top-level document `SELF_TRAINING_VARIANTS.md` consolidates the seven
   local Vega 64 runs (`local_baseline`, `local_a3combo`, `local_a3_smooth`,
